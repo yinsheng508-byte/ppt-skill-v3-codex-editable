@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill Font Calibration Profile",
+  "type": "object",
+  "required": ["schema_version", "basis", "render_probe", "profiles"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "basis": {
+      "type": "object",
+      "required": ["probe_slide_index"],
+      "properties": {
+        "probe_slide_index": { "type": "integer" },
+        "stage2_image": { "type": "string", "minLength": 1 },
+        "stage3_background": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "render_probe": {
+      "type": "object",
+      "required": ["review_status"],
+      "properties": {
+        "review_status": { "enum": ["draft", "passed", "needs_rework"] },
+        "probe_pptx": { "type": "string" },
+        "render_image": { "type": "string" },
+        "compare_image": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/style_profile" }
+    }
+  },
+  "$defs": {
+    "style_profile": {
+      "type": "object",
+      "required": [
+        "style_profile_id",
+        "matched_roles",
+        "font_family",
+        "font_size_scale",
+        "line_height_scale",
+        "bold",
+        "text_box_insets_pt",
+        "vertical_align",
+        "horizontal_align"
+      ],
+      "properties": {
+        "style_profile_id": { "type": "string", "minLength": 1 },
+        "matched_roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "font_family": { "type": "string", "minLength": 1 },
+        "font_size_scale": { "type": "number", "exclusiveMinimum": 0 },
+        "line_height_scale": { "type": "number", "exclusiveMinimum": 0 },
+        "bold": { "type": "boolean" },
+        "text_box_insets_pt": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "type": "number" }
+        },
+        "vertical_align": { "enum": ["top", "middle", "bottom"] },
+        "horizontal_align": { "enum": ["left", "center", "right"] },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

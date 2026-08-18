@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppt-skill-v2.local/schemas/text_fill_execution_report.schema.json",
+  "title": "PPT Skill Stage3 Coordinate Execution Report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "actual_source", "pptx_sha256", "slides"],
+  "properties": {
+    "schema_version": { "const": "2.0" },
+    "actual_source": { "enum": ["pptx_inspect", "pptx_ooxml", "inspect"] },
+    "pptx_sha256": { "type": "string", "pattern": "^sha256:" },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["slide_index", "coordinate_text_units", "summary"],
+        "properties": {
+          "slide_index": { "type": "integer", "minimum": 1 },
+          "coordinate_text_units": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["text_unit_id", "planned", "actual", "within_allowed_range"],
+              "properties": {
+                "text_unit_id": { "type": "string", "minLength": 1 },
+                "planned": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "ownership_id": { "type": "string" },
+                    "split_unit_id": { "type": ["string", "null"] },
+                    "style_profile_id": { "type": ["string", "null"] },
+                    "visual_group_id": { "type": ["string", "null"] },
+                    "text": { "type": "string" },
+                    "display_text": { "type": "string" },
+                    "wrap_policy": { "type": "object" },
+                    "relative_box": { "$ref": "#/$defs/relative_box" },
+                    "box_px": { "type": "object" },
+                    "font": {
+                      "type": "object",
+                      "properties": {
+                        "resolved_family": { "type": "string" },
+                        "target_font_size_pt": { "type": "number" },
+                        "resolved_color": { "type": "string" },
+                        "bold": { "type": ["boolean", "null"] }
+                      }
+                    },
+                    "paragraph": {
+                      "type": "object",
+                      "properties": {
+                        "horizontal_align": { "type": ["string", "null"] },
+                        "vertical_align": { "type": ["string", "null"] },
+                        "line_spacing": { "type": ["number", "null"] },
+                        "text_box_insets_pt": {
+                          "type": ["array", "null"],
+                          "items": { "type": "number" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "actual": {
+                  "type": "object",
+                  "properties": {
+                    "relative_box": { "$ref": "#/$defs/relative_box" },
+                    "font": {
+                      "type": "object",
+                      "properties": {
+                        "resolved_family": { "type": "string" },
+                        "target_font_size_pt": { "type": "number" },
+                        "resolved_color": { "type": "string" }
+                      }
+                    }
+                  }
+                },
+                "within_allowed_range": { "type": "boolean" },
+                "deviation_reason": { "type": "string" }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": { "within_allowed_range": { "const": false } },
+                    "required": ["within_allowed_range"]
+                  },
+                  "then": { "required": ["deviation_reason"] }
+                }
+              ]
+            }
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["coordinate_text_units", "deviations"],
+            "properties": {
+              "coordinate_text_units": { "type": "integer", "minimum": 0 },
+              "expected_native_elements": { "type": "integer", "minimum": 0 },
+              "deviations": { "type": "integer", "minimum": 0 },
+              "style_profile_count": { "type": "integer", "minimum": 0 },
+              "units_with_split_unit_id": { "type": "integer", "minimum": 0 },
+              "units_with_style_profile_id": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "relative_box": {
+      "type": "object",
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "h": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

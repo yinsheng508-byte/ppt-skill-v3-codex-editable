@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v2 Cover Option Style Card",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "option_id",
+    "basis_design_contract",
+    "style_positioning",
+    "best_for",
+    "composition",
+    "visual_medium",
+    "palette_strategy",
+    "typography_direction",
+    "layout_extension",
+    "risk_notes",
+    "prompt_constraints",
+    "selection_explanation"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "option_id": { "type": "string", "enum": ["A", "B", "C", "D"] },
+    "basis_design_contract": { "type": "string" },
+    "style_positioning": { "type": "string" },
+    "best_for": { "type": "array", "items": { "type": "string" } },
+    "composition": { "type": "string" },
+    "visual_medium": { "type": "string" },
+    "palette_strategy": { "type": "string" },
+    "typography_direction": { "type": "string" },
+    "layout_extension": {
+      "type": "object",
+      "required": ["cover_to_inner_pages", "suitable_page_roles", "risky_page_roles"],
+      "properties": {
+        "cover_to_inner_pages": { "type": "string" },
+        "suitable_page_roles": { "type": "array", "items": { "type": "string" } },
+        "risky_page_roles": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "risk_notes": { "type": "array", "items": { "type": "string" } },
+    "prompt_constraints": { "type": "array", "items": { "type": "string" } },
+    "selection_explanation": { "type": "string" }
+  },
+  "additionalProperties": true
+}

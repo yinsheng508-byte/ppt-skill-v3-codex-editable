@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v2 Image Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "stage",
+    "slide_index",
+    "provider",
+    "source",
+    "image_generation_route",
+    "execution_tool",
+    "generation_id",
+    "tool_call_id",
+    "image_gen_result_id",
+    "execution_group_id",
+    "prompt_hash",
+    "image_sha256",
+    "width_px",
+    "height_px",
+    "aspect_ratio",
+    "image_path",
+    "parallel_batch_path",
+    "created_at",
+    "formal_mode",
+    "fixture"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.0" },
+    "stage": { "enum": ["stage2", "stage3"] },
+    "slide_index": { "type": "integer" },
+    "provider": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "image_generation_route": { "enum": ["codex_image_gen", "openai_image_api"] },
+    "execution_tool": { "enum": ["codex_image_gen", "openai_image_api"] },
+    "generation_id": { "type": "string", "minLength": 1 },
+    "tool_call_id": { "type": "string", "minLength": 1 },
+    "image_gen_result_id": { "type": "string", "minLength": 1 },
+    "api_call_id": { "type": "string", "minLength": 1 },
+    "image_api_result_id": { "type": "string", "minLength": 1 },
+    "request_id": { "type": ["string", "null"] },
+    "api_base_url": { "type": ["string", "null"] },
+    "api_endpoint": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "api_evidence_path": { "type": "string", "minLength": 1 },
+    "image_gen_evidence_path": { "type": "string", "minLength": 1 },
+    "provider_image_url": { "type": ["string", "null"] },
+    "execution_group_id": { "type": "string", "minLength": 1 },
+    "prompt_hash": { "type": "string", "pattern": "^sha256:" },
+    "image_sha256": { "type": "string", "pattern": "^sha256:" },
+    "width_px": { "type": "integer", "minimum": 1 },
+    "height_px": { "type": "integer", "minimum": 1 },
+    "aspect_ratio": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" },
+    "target_size": {
+      "type": "object",
+      "required": ["width_px", "height_px"],
+      "properties": {
+        "width_px": { "type": "integer", "minimum": 1 },
+        "height_px": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "preferred_minimum_size": {
+      "type": "object",
+      "required": ["width_px", "height_px"],
+      "properties": {
+        "width_px": { "type": "integer", "minimum": 1 },
+        "height_px": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "minimum_acceptable_size": {
+      "type": "object",
+      "required": ["width_px", "height_px"],
+      "properties": {
+        "width_px": { "type": "integer", "minimum": 1 },
+        "height_px": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "size_policy": { "type": "string", "minLength": 1 },
+    "postprocess_policy": { "type": "string", "minLength": 1 },
+    "meets_preferred_size": { "type": "boolean" },
+    "meets_target_size": { "type": "boolean" },
+    "size_warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "canonical_policy": { "type": "string", "enum": ["preserve_api_raster", "normalize_at_stage2"] },
+    "original_api_output": {
+      "type": "object",
+      "required": ["path", "image_sha256", "width_px", "height_px", "aspect_ratio"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "image_sha256": { "type": "string", "pattern": "^sha256:" },
+        "width_px": { "type": "integer", "minimum": 1 },
+        "height_px": { "type": "integer", "minimum": 1 },
+        "aspect_ratio": { "type": "string", "pattern": "^[0-9]+:[0-9]+$" }
+      },
+      "additionalProperties": true
+    },
+    "postprocess": {
+      "type": "object",
+      "required": ["type", "manifest_path", "method", "target_size"],
+      "properties": {
+        "type": { "const": "canonical_image_postprocess" },
+        "manifest_path": { "type": "string", "minLength": 1 },
+        "method": { "type": "string", "enum": ["fit_center_crop", "contain_pad"] },
+        "postprocess_policy": { "type": "string" },
+        "target_size": {
+          "type": "object",
+          "required": ["width_px", "height_px"],
+          "properties": {
+            "width_px": { "type": "integer", "minimum": 1 },
+            "height_px": { "type": "integer", "minimum": 1 }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "purpose": {
+      "enum": ["cover_option", "trial_first5", "full_slide", "stage3_background", "stage2_text_removed_background"]
+    },
+    "promoted_from_trial_first5": { "type": "boolean" },
+    "trial_result_path": { "type": "string" },
+    "trial_image_path": { "type": "string" },
+    "promoted_from_cover_option": { "type": "boolean" },
+    "selected_cover_option": { "type": "string" },
+    "cover_option_id": { "type": "string" },
+    "cover_option_result_path": { "type": "string" },
+    "cover_option_image_path": { "type": "string" },
+    "background_route": { "type": "string" },
+    "restore_targets_hash": { "type": "string", "pattern": "^sha256:" },
+    "restore_targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/restore_target" }
+    },
+    "source_stage2": {
+      "type": "object",
+      "required": ["image_path", "result_path", "image_sha256"],
+      "properties": {
+        "image_path": { "type": "string", "minLength": 1 },
+        "result_path": { "type": "string", "minLength": 1 },
+        "image_sha256": { "type": "string", "pattern": "^sha256:" },
+        "generation_id": { "type": "string" },
+        "provider_image_url": { "type": ["string", "null"] }
+      }
+    },
+    "stage2_reference_policy": { "type": "string" },
+    "option_id": { "type": ["string", "null"] },
+    "attempt_id": { "type": ["string", "null"] },
+    "version": { "type": ["integer", "null"] },
+    "image_path": { "type": "string", "minLength": 1 },
+    "parallel_batch_path": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "minLength": 1 },
+    "formal_mode": { "type": "boolean" },
+    "fixture": { "type": "boolean" },
+    "packet_path": { "type": "string" },
+    "result_path": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "formal_mode": { "const": true },
+          "fixture": { "const": false }
+        },
+        "required": ["formal_mode", "fixture"]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "image_generation_route": { "const": "codex_image_gen" },
+              "provider": { "const": "codex_image_gen" },
+              "source": { "const": "codex_image_gen" },
+              "execution_tool": { "const": "codex_image_gen" }
+            },
+            "required": ["tool_call_id", "image_gen_result_id", "image_gen_evidence_path"]
+          },
+          {
+            "properties": {
+              "image_generation_route": { "const": "openai_image_api" },
+              "provider": { "const": "openai_image_api" },
+              "source": { "const": "openai_image_api" },
+              "execution_tool": { "const": "openai_image_api" }
+            },
+            "required": ["api_call_id", "image_api_result_id", "api_endpoint", "model", "api_evidence_path"]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": { "const": "stage3" },
+          "formal_mode": { "const": true },
+          "fixture": { "const": false }
+        },
+        "required": ["stage", "formal_mode", "fixture"]
+      },
+      "then": {
+        "required": ["background_route", "source_stage2", "restore_targets_hash", "restore_targets"],
+        "properties": {
+          "purpose": { "const": "stage2_text_removed_background" },
+          "background_route": { "const": "stage2_preserve_text_removed_background" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "restore_target": {
+      "type": "object",
+      "required": ["target_id", "action", "text", "source"],
+      "properties": {
+        "target_id": { "type": "string", "minLength": 1 },
+        "action": { "enum": ["remove_and_restore", "preserve_in_background", "remove_without_restore"] },
+        "text": { "type": "string", "minLength": 1 },
+        "semantic_role": { "type": "string" },
+        "source": {
+          "type": "object",
+          "required": ["source_field"],
+          "properties": {
+            "content_json_path": { "type": "string" },
+            "slide_prompt_briefs_path": { "type": "string" },
+            "source_field": { "type": "string", "minLength": 1 }
+          },
+          "anyOf": [
+            { "required": ["content_json_path"] },
+            { "required": ["slide_prompt_briefs_path"] }
+          ]
+        },
+        "expected_restore_as": { "type": "string" },
+        "visual_anchor": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v2.3 Content Asset",
+  "type": "object",
+  "required": ["schema_version", "deck_title", "audience", "route", "slides"],
+  "properties": {
+    "schema_version": { "const": "2.3" },
+    "deck_title": { "type": "string" },
+    "audience": { "type": "string" },
+    "route": { "type": "string" },
+    "source_summary": { "type": "string" },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["slide_index", "page_type", "title", "purpose", "final_visible_text"],
+        "properties": {
+          "slide_index": { "type": "integer" },
+          "page_type": { "type": "string" },
+          "page_role": { "type": "string" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "source_basis": { "type": "array", "items": { "type": "object" } },
+          "final_visible_text": { "type": "array", "items": { "type": "string" } },
+          "text_contract": {
+            "type": "object",
+            "properties": {
+              "must_keep": { "type": "array", "items": { "type": "string" } },
+              "can_soft_polish": { "type": "array", "items": { "type": "string" } },
+              "do_not_remove": { "type": "array", "items": { "type": "string" } },
+              "do_not_invent": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": true
+          },
+          "content_mutation_level": { "type": "string", "enum": ["preserve", "soft_polish", "restructure", "compress"] },
+          "facts_to_preserve": { "type": "array", "items": { "type": "string" } },
+          "content_blocks": { "type": "array", "items": { "type": "object" } },
+          "editable_required": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
