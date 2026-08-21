@@ -21,7 +21,7 @@
 优先使用被动执行器：
 
 ```js
-const skillRoot = "/absolute/path/to/ppt-skill-v2"; // 使用当前 Skill 根目录，不要跨安装位置硬编码
+const skillRoot = "/absolute/path/to/current-ppt-skill"; // 使用当前 Skill 根目录，不要跨安装位置硬编码
 const { installCanvaAiLayerRunner } = await import(`${skillRoot}/scripts/runtime/canva_ai_layer_runner.mjs`);
 const runner = installCanvaAiLayerRunner(tab);
 const result = await runner.processRange(3, 26);

@@ -7,6 +7,7 @@ STATE_DIR = "_state"
 DECISIONS_DIR = "_decisions"
 PROJECT_STATE_FILE = "project_state.json"
 EVENTS_FILE = "events.jsonl"
+CONTROL_DIR = "control"
 
 
 def state_dir(run_dir: str | Path) -> Path:
@@ -23,6 +24,10 @@ def project_state_path(run_dir: str | Path) -> Path:
 
 def events_path(run_dir: str | Path) -> Path:
     return state_dir(run_dir) / EVENTS_FILE
+
+
+def control_dir(run_dir: str | Path) -> Path:
+    return state_dir(run_dir) / CONTROL_DIR
 
 
 def decision_path(run_dir: str | Path, decision_id: str) -> Path:

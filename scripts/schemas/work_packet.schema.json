@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill Work Packet",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "packet_id",
+    "project_name",
+    "run_dir",
+    "stage",
+    "action",
+    "status",
+    "required_actor",
+    "allowed_commands",
+    "slide_scope",
+    "input_artifacts",
+    "input_hashes",
+    "expected_outputs",
+    "stop_conditions",
+    "user_confirmation_boundary",
+    "drift_guards",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "packet_id": { "type": "string", "minLength": 1 },
+    "project_name": { "type": "string", "minLength": 1 },
+    "run_dir": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["stage0", "stage1", "stage2", "stage3", "stage4"] },
+    "action": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["active", "completed", "blocked", "failed"] },
+    "required_actor": { "type": "string", "minLength": 1 },
+    "allowed_commands": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "slide_scope": {
+      "type": "object",
+      "required": ["mode", "slide_indices"],
+      "properties": {
+        "mode": { "enum": ["all_current_stage", "slide_indices"] },
+        "slide_indices": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "input_artifacts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "input_hashes": { "type": "object" },
+    "expected_outputs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "stop_conditions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "user_confirmation_boundary": {
+      "type": "object",
+      "required": ["required_after_completion", "decision_type"],
+      "properties": {
+        "required_after_completion": { "type": "boolean" },
+        "decision_type": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "drift_guards": { "type": "object" },
+    "completion_summary": { "type": "string" },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "closed_at": { "type": "string" }
+  },
+  "additionalProperties": true
+}

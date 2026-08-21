@@ -48,7 +48,7 @@ def package_skill(skill_dir: str | Path, output_dir: str | Path) -> dict[str, An
     if not files:
         raise ValidationError("no files collected for package")
 
-    package_name = root.name
+    package_name = _skill_package_name(root)
     zip_path = out / f"{package_name}.zip"
     manifest_path = out / f"{package_name}.manifest.json"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -58,6 +58,7 @@ def package_skill(skill_dir: str | Path, output_dir: str | Path) -> dict[str, An
     manifest = {
         "schema_version": "2.0",
         "package_name": package_name,
+        "source_dir_name": root.name,
         "zip_path": str(zip_path),
         "manifest_path": str(manifest_path),
         "files": files,
@@ -76,6 +77,27 @@ def package_skill(skill_dir: str | Path, output_dir: str | Path) -> dict[str, An
     return manifest
 
 
+def _skill_package_name(root: Path) -> str:
+    skill_path = root / "SKILL.md"
+    text = skill_path.read_text(encoding="utf-8")
+    if not text.startswith("---"):
+        return root.name
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return root.name
+    for raw_line in parts[1].splitlines():
+        line = raw_line.strip()
+        if not line.startswith("name:"):
+            continue
+        value = line.split(":", 1)[1].strip().strip("'\"")
+        if not value:
+            break
+        if not _is_safe_package_name(value):
+            raise ValidationError(f"invalid skill package name in SKILL.md: {value}")
+        return value
+    return root.name
+
+
 def _collect_files(root: Path) -> list[str]:
     collected: list[str] = []
     for child in sorted(root.iterdir(), key=lambda path: path.name):
@@ -91,6 +113,16 @@ def _collect_files(root: Path) -> list[str]:
                 if _is_allowed_relpath(relpath):
                     collected.append(relpath)
     return collected
+
+
+def _is_safe_package_name(value: str) -> bool:
+    allowed = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+    return (
+        len(value) <= 64
+        and value[0].isalnum()
+        and value[-1].isalnum()
+        and all(char in allowed for char in value)
+    )
 
 
 def _include_file(path: Path) -> bool:

@@ -6,11 +6,14 @@ import sys
 from typing import Sequence
 
 from .decisions import execute_decision, load_decision, record_decision
+from .decision_factory import make_decision
+from .control import build_next_action, build_resume_brief, render_resume_brief_markdown
 from .cover_options import dispatch_cover_option_packets, promote_selected_cover_option
 from .coordinate_preview import build_coordinate_preview
 from .doctor import check_project
+from .drift_check import run_drift_check
 from .coordinate_stage3_qa import record_coordinate_stage3_qa_review
-from .editable_coordinate_plan import record_editable_coordinate_plan
+from .editable_coordinate_plan import create_editable_coordinate_plan_draft, record_editable_coordinate_plan
 from .editable_brief import build_editable_brief
 from .editable_deck import record_editable_deck
 from .font_calibration_profile import create_font_calibration_profile_draft, record_font_calibration_profile
@@ -23,6 +26,7 @@ from .migration_v1 import render_v1_summary_markdown, summarize_v1_project, writ
 from .materials import add_material, list_materials
 from .officecli_coordinate_builder import build_officecli_coordinate_deck
 from .project_init import create_project
+from .qa_drafts import create_stage2_visual_qa_draft, create_stage3_qa_draft
 from .layout_safety_contract import record_layout_safety_contract
 from .native_render_check import record_native_render_check
 from .officecli_pptx_inspector import build_officecli_coordinate_execution_report
@@ -45,8 +49,9 @@ from .style_templates import (
     validate_style_templates_report,
 )
 from .text_unit_split_plan import create_text_unit_split_plan_draft, record_text_unit_split_plan
-from .text_ownership_map import record_text_ownership_map
+from .text_ownership_map import create_text_ownership_map_draft, record_text_ownership_map
 from .validation import ValidationError
+from .work_packets import close_work_packet, create_work_packet
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,6 +67,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_parser = subparsers.add_parser("status", help="Read project state.")
     status_parser.add_argument("--run-dir", required=True)
+    resume_brief_parser = subparsers.add_parser("resume-brief", help="Build a resumable project control brief.")
+    resume_brief_parser.add_argument("--run-dir", required=True)
+    resume_brief_parser.add_argument("--format", choices=["json", "markdown"], default="json")
+    next_action_parser = subparsers.add_parser("next-action", help="Build the next permitted controller action summary.")
+    next_action_parser.add_argument("--run-dir", required=True)
+    drift_check_parser = subparsers.add_parser("drift-check", help="Check whether a controller action would drift across stage boundaries.")
+    drift_check_parser.add_argument("--run-dir", required=True)
+    drift_check_parser.add_argument("--action")
+    create_packet_parser = subparsers.add_parser("create-work-packet", help="Create one bounded long-task work packet.")
+    create_packet_parser.add_argument("--run-dir", required=True)
+    create_packet_parser.add_argument("--stage", choices=["stage0", "stage1", "stage2", "stage3", "stage4"], required=True)
+    create_packet_parser.add_argument("--action", required=True)
+    create_packet_parser.add_argument("--slide", type=int, action="append", default=[])
+    create_packet_parser.add_argument("--allowed-command", action="append", default=[])
+    create_packet_parser.add_argument("--input-artifact", action="append", default=[])
+    create_packet_parser.add_argument("--expected-output", action="append", default=[])
+    create_packet_parser.add_argument("--stop-condition", action="append", default=[])
+    create_packet_parser.add_argument("--requires-user-confirmation", action="store_true")
+    create_packet_parser.add_argument("--confirmation-decision-type")
+    close_packet_parser = subparsers.add_parser("close-work-packet", help="Close one active work packet with a completion summary.")
+    close_packet_parser.add_argument("--run-dir", required=True)
+    close_packet_parser.add_argument("--packet", required=True)
+    close_packet_parser.add_argument("--status", choices=["completed", "blocked", "failed"], required=True)
+    close_packet_parser.add_argument("--summary", required=True)
 
     sync_parser = subparsers.add_parser("sync-stage-docs", help="Refresh user-facing stage docs.")
     sync_parser.add_argument("--run-dir", required=True)
@@ -76,6 +105,17 @@ def build_parser() -> argparse.ArgumentParser:
     record_decision_parser = subparsers.add_parser("record-decision", help="Record a controller decision.")
     record_decision_parser.add_argument("--run-dir", required=True)
     record_decision_parser.add_argument("--decision-file", required=True)
+    make_decision_parser = subparsers.add_parser("make-decision", help="Create and record a controller decision from thin inputs.")
+    make_decision_parser.add_argument("--run-dir", required=True)
+    make_decision_parser.add_argument("--type", required=True, dest="decision_type")
+    make_decision_parser.add_argument("--notes", required=True)
+    make_decision_parser.add_argument("--user-confirmed", action="store_true")
+    make_decision_parser.add_argument("--controller-reviewed", dest="controller_reviewed", action="store_true", default=True)
+    make_decision_parser.add_argument("--not-controller-reviewed", dest="controller_reviewed", action="store_false")
+    make_decision_parser.add_argument("--confirmed-file", action="append", default=[])
+    make_decision_parser.add_argument("--allowed-action", action="append")
+    make_decision_parser.add_argument("--slide", type=int, action="append", default=[])
+    make_decision_parser.add_argument("--image-generation-route", choices=["codex_image_gen", "openai_image_api"])
 
     execute_decision_parser = subparsers.add_parser("execute-decision", help="Execute one allowed decision action.")
     execute_decision_parser.add_argument("--run-dir", required=True)
@@ -193,11 +233,18 @@ def build_parser() -> argparse.ArgumentParser:
     ownership_parser = subparsers.add_parser("record-text-ownership-map", help="Record stage3 text ownership map.")
     ownership_parser.add_argument("--run-dir", required=True)
     ownership_parser.add_argument("--ownership-map", required=True)
+    ownership_draft_parser = subparsers.add_parser("create-text-ownership-map-draft", help="Create a stage3 text ownership map draft.")
+    ownership_draft_parser.add_argument("--run-dir", required=True)
+    ownership_draft_parser.add_argument("--output")
     coordinate_plan_parser = subparsers.add_parser("record-editable-coordinate-plan", help="Record stage3 editable coordinate plan.")
     coordinate_plan_parser.add_argument("--run-dir", required=True)
     coordinate_plan_parser.add_argument("--plan", required=True)
+    coordinate_plan_draft_parser = subparsers.add_parser("create-editable-coordinate-plan-draft", help="Create a stage3 editable coordinate plan draft.")
+    coordinate_plan_draft_parser.add_argument("--run-dir", required=True)
+    coordinate_plan_draft_parser.add_argument("--output")
     coordinate_preview_parser = subparsers.add_parser("build-coordinate-preview", help="Build stage3 coordinate overlay preview images.")
     coordinate_preview_parser.add_argument("--run-dir", required=True)
+    coordinate_preview_parser.add_argument("--plan")
     officecli_builder_parser = subparsers.add_parser(
         "build-officecli-coordinate-deck",
         help="Build a stage3 editable PPTX using OfficeCLI and a confirmed coordinate plan.",
@@ -241,9 +288,16 @@ def build_parser() -> argparse.ArgumentParser:
     stage2_visual_qa_parser = subparsers.add_parser("record-stage2-visual-qa", help="Record controller aesthetic QA for stage2 images.")
     stage2_visual_qa_parser.add_argument("--run-dir", required=True)
     stage2_visual_qa_parser.add_argument("--review", required=True)
+    stage2_visual_qa_draft_parser = subparsers.add_parser("create-stage2-visual-qa-draft", help="Create a controller-review stage2 visual QA draft.")
+    stage2_visual_qa_draft_parser.add_argument("--run-dir", required=True)
+    stage2_visual_qa_draft_parser.add_argument("--scope", choices=["cover_options", "trial_first5", "full_image_deck"], default="full_image_deck")
+    stage2_visual_qa_draft_parser.add_argument("--output")
     coordinate_qa_parser = subparsers.add_parser("record-coordinate-stage3-qa", help="Record coordinate rebuild QA for stage3 editable PPT.")
     coordinate_qa_parser.add_argument("--run-dir", required=True)
     coordinate_qa_parser.add_argument("--review", required=True)
+    coordinate_qa_draft_parser = subparsers.add_parser("create-stage3-qa-draft", help="Create a controller-review stage3 coordinate QA draft.")
+    coordinate_qa_draft_parser.add_argument("--run-dir", required=True)
+    coordinate_qa_draft_parser.add_argument("--output")
     native_render_parser = subparsers.add_parser("record-native-render-check", help="Record lightweight native render check for stage3 editable PPT.")
     native_render_parser.add_argument("--run-dir", required=True)
     native_render_parser.add_argument("--check", required=True)
@@ -271,6 +325,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "status":
         print(json.dumps(read_state(args.run_dir), ensure_ascii=False))
+        return 0
+    if args.command == "resume-brief":
+        brief = build_resume_brief(args.run_dir)
+        if args.format == "markdown":
+            print(render_resume_brief_markdown(brief))
+        else:
+            print(json.dumps(brief, ensure_ascii=False))
+        return 0
+    if args.command == "next-action":
+        print(json.dumps(build_next_action(args.run_dir), ensure_ascii=False))
+        return 0
+    if args.command == "drift-check":
+        result = run_drift_check(args.run_dir, action=args.action)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result["ok"] else 1
+    if args.command == "create-work-packet":
+        packet = create_work_packet(
+            args.run_dir,
+            stage=args.stage,
+            action=args.action,
+            slide_indices=args.slide,
+            allowed_commands=args.allowed_command,
+            input_artifacts=args.input_artifact,
+            expected_outputs=args.expected_output,
+            stop_conditions=args.stop_condition,
+            requires_user_confirmation=args.requires_user_confirmation,
+            confirmation_decision_type=args.confirmation_decision_type,
+        )
+        print(json.dumps({"status": "work_packet_created", "packet": packet}, ensure_ascii=False))
+        return 0
+    if args.command == "close-work-packet":
+        packet = close_work_packet(args.run_dir, args.packet, status=args.status, summary=args.summary)
+        print(json.dumps({"status": "work_packet_closed", "packet": packet}, ensure_ascii=False))
         return 0
     if args.command == "sync-stage-docs":
         sync_stage_docs(args.run_dir)
@@ -422,12 +509,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         ownership_path = record_text_ownership_map(args.run_dir, args.ownership_map)
         print(json.dumps({"status": "text_ownership_map_recorded", "ownership_map_path": str(ownership_path)}, ensure_ascii=False))
         return 0
+    if args.command == "create-text-ownership-map-draft":
+        ownership_path = create_text_ownership_map_draft(args.run_dir, output_file=args.output)
+        print(json.dumps({"status": "text_ownership_map_draft_created", "ownership_map_path": str(ownership_path)}, ensure_ascii=False))
+        return 0
     if args.command == "record-editable-coordinate-plan":
         plan_path = record_editable_coordinate_plan(args.run_dir, args.plan)
         print(json.dumps({"status": "editable_coordinate_plan_recorded", "plan_path": str(plan_path)}, ensure_ascii=False))
         return 0
+    if args.command == "create-editable-coordinate-plan-draft":
+        result = create_editable_coordinate_plan_draft(args.run_dir, output_file=args.output)
+        print(
+            json.dumps(
+                {
+                    "status": "editable_coordinate_plan_draft_created",
+                    "plan_path": str(result["plan_path"]),
+                    "warnings_path": str(result["warnings_path"]),
+                    "preview": result["preview"],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
     if args.command == "build-coordinate-preview":
-        preview = build_coordinate_preview(args.run_dir)
+        preview = build_coordinate_preview(args.run_dir, plan_file=args.plan)
         print(json.dumps({"status": "coordinate_preview_built", "preview": preview}, ensure_ascii=False))
         return 0
     if args.command == "build-officecli-coordinate-deck":
@@ -478,9 +583,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         review_path = record_stage2_aesthetic_review(args.run_dir, args.review)
         print(json.dumps({"status": "stage2_visual_qa_recorded", "review_path": str(review_path)}, ensure_ascii=False))
         return 0
+    if args.command == "create-stage2-visual-qa-draft":
+        review_path = create_stage2_visual_qa_draft(args.run_dir, scope=args.scope, output_file=args.output)
+        print(json.dumps({"status": "stage2_visual_qa_draft_created", "review_path": str(review_path)}, ensure_ascii=False))
+        return 0
     if args.command == "record-coordinate-stage3-qa":
         review_path = record_coordinate_stage3_qa_review(args.run_dir, args.review)
         print(json.dumps({"status": "coordinate_stage3_qa_recorded", "review_path": str(review_path)}, ensure_ascii=False))
+        return 0
+    if args.command == "create-stage3-qa-draft":
+        review_path = create_stage3_qa_draft(args.run_dir, output_file=args.output)
+        print(json.dumps({"status": "stage3_qa_draft_created", "review_path": str(review_path)}, ensure_ascii=False))
         return 0
     if args.command == "record-native-render-check":
         check_path = record_native_render_check(args.run_dir, args.check)
@@ -509,6 +622,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "record-decision":
         target = record_decision(args.run_dir, read_json(args.decision_file))
         print(json.dumps({"status": "recorded", "path": str(target)}, ensure_ascii=False))
+        return 0
+    if args.command == "make-decision":
+        result = make_decision(
+            args.run_dir,
+            decision_type=args.decision_type,
+            notes=args.notes,
+            user_confirmed=args.user_confirmed,
+            controller_reviewed=args.controller_reviewed,
+            confirmed_files=args.confirmed_file,
+            allowed_actions=args.allowed_action,
+            slide_indices=args.slide,
+            image_generation_route=args.image_generation_route,
+        )
+        print(json.dumps(result, ensure_ascii=False))
         return 0
     if args.command == "execute-decision":
         decision = load_decision(args.run_dir, args.decision_id, args.decision_file)

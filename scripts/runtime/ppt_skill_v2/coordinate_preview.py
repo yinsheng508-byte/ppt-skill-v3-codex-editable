@@ -5,9 +5,9 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .editable_coordinate_plan import load_editable_coordinate_plan
+from .editable_coordinate_plan import load_editable_coordinate_plan, validate_editable_coordinate_plan
 from .events import append_event
-from .json_io import write_json
+from .json_io import read_json, write_json
 
 
 PREVIEW_REL_DIR = "阶段3_可编辑PPT/坐标复刻预览"
@@ -19,9 +19,9 @@ def coordinate_preview_dir(run_dir: str | Path) -> Path:
     return Path(run_dir) / PREVIEW_REL_DIR
 
 
-def build_coordinate_preview(run_dir: str | Path) -> dict[str, Any]:
+def build_coordinate_preview(run_dir: str | Path, plan_file: str | Path | None = None) -> dict[str, Any]:
     root = Path(run_dir)
-    plan = load_editable_coordinate_plan(root)
+    plan = validate_editable_coordinate_plan(read_json(plan_file)) if plan_file else load_editable_coordinate_plan(root)
     output_dir = coordinate_preview_dir(root)
     text_effect_dir = root / TEXT_EFFECT_REL_DIR
     output_dir.mkdir(parents=True, exist_ok=True)

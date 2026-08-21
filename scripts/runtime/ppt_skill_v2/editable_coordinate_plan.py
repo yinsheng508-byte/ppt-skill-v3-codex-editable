@@ -8,7 +8,7 @@ from .box_utils import require_bool, require_number, require_string, validate_pi
 from .events import append_event
 from .font_calibration_profile import font_calibration_profile_path, load_font_calibration_profile, profile_ids
 from .json_io import read_json, write_json
-from .image_geometry import aspect_ratio_label, is_16_9
+from .image_geometry import aspect_ratio_label, is_16_9, read_image_dimensions
 from .stage1_plan import load_stage1_slides
 from .stage3_scope import apply_stage3_scope, stage3_scope_summary
 from .stage3_artifact_hashes import file_sha256
@@ -59,6 +59,8 @@ def record_editable_coordinate_plan(run_dir: str | Path, plan_file: str | Path) 
         raise FileNotFoundError(f"editable coordinate plan not found: {source}")
 
     plan = apply_stage3_scope(validate_editable_coordinate_plan(read_json(source)), state, "editable_coordinate_plan", strict=True)
+    if isinstance(plan.get("basis"), dict) and plan["basis"].get("status") == "draft":
+        raise ValidationError("editable coordinate plan draft must be controller-reviewed before formal record")
     stage1 = apply_stage3_scope(validate_stage1_plan(load_stage1_slides(root)), state, "stage1_plan")
     ownership = apply_stage3_scope(load_text_ownership_map(root), state, "text_ownership_map", strict=True)
     require_matching_slide_indices(("stage1_plan", stage1), ("editable_coordinate_plan", plan))
@@ -105,6 +107,66 @@ def record_editable_coordinate_plan(run_dir: str | Path, plan_file: str | Path) 
         stage3_scope=stage3_scope_summary(state),
     )
     return target
+
+
+def create_editable_coordinate_plan_draft(run_dir: str | Path, output_file: str | Path | None = None) -> dict[str, Any]:
+    root = Path(run_dir)
+    state = read_state(root)
+    if state["current_stage"] != "stage3":
+        raise ValidationError("editable coordinate plan draft can only be created in stage3")
+    ownership = apply_stage3_scope(load_text_ownership_map(root), state, "text_ownership_map", strict=True)
+    split_plan = apply_stage3_scope(load_text_unit_split_plan(root), state, "text_unit_split_plan", strict=True) if text_unit_split_plan_path(root).exists() else None
+    slides = []
+    for ownership_slide in ownership["slides"]:
+        slide_index = ownership_slide["slide_index"]
+        source = _draft_source_image(root, slide_index)
+        background = _draft_background_image(root, slide_index, source)
+        canvas = {
+            "basis": "stage3_background_image",
+            "width_px": background["width_px"],
+            "height_px": background["height_px"],
+            "scale_x_from_stage2": background["width_px"] / source["width_px"],
+            "scale_y_from_stage2": background["height_px"] / source["height_px"],
+        }
+        slides.append(
+            {
+                "slide_index": slide_index,
+                "source_image": source,
+                "stage3_background_image": background,
+                "coordinate_canvas": canvas,
+                "text_units": _draft_text_units(ownership_slide, canvas),
+                "native_elements": [],
+            }
+        )
+    draft = {
+        "schema_version": "1.0",
+        "coordinate_mode": COORDINATE_MODE,
+        "basis": {
+            "source": "text_ownership_map_and_stage2_stage3_image_results",
+            "status": "draft",
+            "controller_review_required": True,
+            "warning": "Draft uses grid placeholder geometry. Controller must replace with approved image geometry before formal record.",
+        },
+        "slides": slides,
+    }
+    validate_editable_coordinate_plan(draft)
+    require_coordinate_plan_matches_ownership(draft, ownership)
+    if split_plan is not None:
+        require_coordinate_plan_matches_split_plan(draft, split_plan)
+    warnings = build_coordinate_plan_warnings(draft, split_plan=split_plan)
+    warnings["overall_status"] = "draft_requires_controller_review"
+    warnings.setdefault("warnings", []).insert(
+        0,
+        _warning(0, "", "draft_placeholder_geometry", "坐标草稿使用网格占位框，主控必须替换为阶段2确认图上的真实文字坐标后才能正式入账"),
+    )
+    target = Path(output_file) if output_file else root / "_state" / "阶段3" / "drafts" / "editable_coordinate_plan.draft.json"
+    write_json(target, draft)
+    warning_target = target.with_suffix(".warnings.json")
+    write_json(warning_target, warnings)
+    from .coordinate_preview import build_coordinate_preview
+
+    preview = build_coordinate_preview(root, plan_file=target)
+    return {"plan_path": target, "warnings_path": warning_target, "preview": preview}
 
 
 def validate_editable_coordinate_plan(data: Any) -> dict[str, Any]:
@@ -199,6 +261,106 @@ def require_coordinate_plan_matches_font_profile(plan: dict[str, Any], font_prof
     """Compatibility hook: font profile drift is reported as warnings, not a hard gate."""
     _coordinate_plan_font_profile_warnings(plan, font_profile)
     return None
+
+
+def _draft_source_image(root: Path, slide_index: int) -> dict[str, Any]:
+    result = _load_stage2_result(root, slide_index)
+    relpath = result.get("image_path") or f"阶段2_图片版PPT/img/slide_{slide_index:03d}.png"
+    return _draft_image_info(root, relpath, result, sha_field="image_sha256")
+
+
+def _draft_background_image(root: Path, slide_index: int, source: dict[str, Any]) -> dict[str, Any]:
+    result = _load_stage3_background_result(root, slide_index)
+    relpath = result.get("image_path") or f"阶段3_可编辑PPT/img/background_{slide_index:03d}.png"
+    info = _draft_image_info(root, relpath, result, sha_field="image_sha256")
+    info["aspect_ratio"] = aspect_ratio_label(info["width_px"], info["height_px"])
+    info["source_stage2_sha256"] = source["sha256"]
+    return info
+
+
+def _draft_image_info(root: Path, relpath: Any, result: dict[str, Any], *, sha_field: str) -> dict[str, Any]:
+    if not isinstance(relpath, str) or not relpath.strip():
+        raise ValidationError("image result missing image_path")
+    path = root / relpath
+    if not path.exists():
+        raise FileNotFoundError(f"image file missing for coordinate draft: {path}")
+    dimensions = read_image_dimensions(path)
+    width = result.get("width_px") if isinstance(result.get("width_px"), int) else dimensions["width_px"]
+    height = result.get("height_px") if isinstance(result.get("height_px"), int) else dimensions["height_px"]
+    sha = result.get(sha_field) if isinstance(result.get(sha_field), str) else file_sha256(path)
+    return {
+        "path": relpath,
+        "width_px": width,
+        "height_px": height,
+        "sha256": sha,
+    }
+
+
+def _draft_text_units(ownership_slide: dict[str, Any], canvas: dict[str, Any]) -> list[dict[str, Any]]:
+    editable_items = [item for item in ownership_slide.get("editable_page_layer", []) if item.get("restore_as_editable", True)]
+    units = []
+    count = max(1, len(editable_items))
+    for index, item in enumerate(editable_items, start=1):
+        box = _draft_box(canvas["width_px"], canvas["height_px"], index, count)
+        semantic_role = item.get("semantic_role", "body")
+        target_size = 28 if semantic_role in {"page_title", "title", "headline"} else 20
+        units.append(
+            {
+                "text_unit_id": f"{item['ownership_id']}_unit",
+                "ownership_id": item["ownership_id"],
+                **({"split_unit_id": item["split_unit_id"]} if isinstance(item.get("split_unit_id"), str) else {}),
+                "visual_group_id": item.get("visual_group_id", f"{item['ownership_id']}_group"),
+                "content_source": item["text_source"],
+                "text": item["expected_text"],
+                "semantic_role": semantic_role,
+                "geometry_source": {
+                    "type": "manual_annotation",
+                    "method": "runtime_grid_placeholder_for_controller_refinement",
+                    "human_reviewed": True,
+                },
+                "box_px": box,
+                "relative_box": _relative_box(box, canvas),
+                "font": {
+                    "family_token": "default_cn",
+                    "resolved_family": "Microsoft YaHei",
+                    "target_font_size_pt": target_size,
+                    "allowed_font_size_range_pt": [max(8, target_size - 4), target_size + 4],
+                    "color_token": "body",
+                    "resolved_color": "#111827",
+                },
+                "paragraph": {
+                    "horizontal_align": "left",
+                    "vertical_align": "top",
+                    "text_box_insets_pt": [0, 0, 0, 0],
+                },
+                "fit_policy": {
+                    "auto_shrink": False,
+                    "overflow_action": "manual_adjust_required",
+                },
+            }
+        )
+    return units
+
+
+def _draft_box(width: int, height: int, index: int, count: int) -> dict[str, int]:
+    x = int(width * 0.12)
+    w = int(width * 0.76)
+    available_h = int(height * 0.72)
+    gap = max(8, int(height * 0.012))
+    h = max(32, min(int(height * 0.10), int((available_h - gap * max(0, count - 1)) / count)))
+    y = int(height * 0.14) + (index - 1) * (h + gap)
+    if y + h > height:
+        y = max(0, height - h)
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+def _relative_box(box: dict[str, int], canvas: dict[str, Any]) -> dict[str, float]:
+    return {
+        "x": box["x"] / canvas["width_px"],
+        "y": box["y"] / canvas["height_px"],
+        "w": box["w"] / canvas["width_px"],
+        "h": box["h"] / canvas["height_px"],
+    }
 
 
 def _coordinate_plan_font_profile_warnings(plan: dict[str, Any], font_profile: dict[str, Any]) -> list[dict[str, Any]]:

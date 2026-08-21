@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .events import append_event
 from .json_io import write_json
-from .paths import decisions_dir, state_dir
+from .paths import control_dir, decisions_dir, state_dir
 from .stage_docs import sync_stage_docs
 from .state import make_initial_state, write_state
 
@@ -108,6 +108,8 @@ def create_project(project_name: str, output_root: str | Path) -> Path:
         "阶段4/logs",
     ]:
         (state_root / dirname).mkdir(parents=True, exist_ok=True)
+    control_dir(run_dir).mkdir(parents=True, exist_ok=True)
+    (control_dir(run_dir) / "work_packets").mkdir(parents=True, exist_ok=True)
     decisions_dir(run_dir).mkdir(parents=True, exist_ok=True)
 
     write_json(state_root / "阶段0" / "materials_index.json", {"schema_version": "2.0", "materials": []})

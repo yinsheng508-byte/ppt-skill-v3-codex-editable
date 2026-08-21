@@ -2,15 +2,18 @@
 
 ## 范围
 
-本文件适用于整个 `ppt-skill-v2` 目录。
+本文件适用于当前 PPT Skill 仓库。稳定调用名仍是 `ppt-skill-v2`，当前工作区目录可能带有 `ppt-skill-v3-codex可编辑` 等架构迭代命名。
 
-这个目录是 PPT Skill v2 的 Skill 主包和设计实现区，不是某个具体 PPT 项目目录。不要把本目录直接当作 `run_dir`、项目输出目录或用户交付目录。
+这个目录是 PPT Skill 的主包和设计实现区，不是某个具体 PPT 项目目录。不要把本目录直接当作 `run_dir`、项目输出目录或用户交付目录。
 
 ## 启动顺序
 
 1. 把当前目录当作 Skill 根目录。
 2. 先读 `SKILL.md`。
 3. 根据任务类型按需读取：
+   - 跨阶段红线：`references/核心不变量.md`
+   - 版本命名和历史兼容：`references/版本与兼容说明.md`
+   - 项目恢复和防漂移：`references/恢复与防漂移协议.md`
    - 项目目录和恢复：`references/项目目录规范.md`
    - 阶段流程：`references/阶段流程.md`
    - 阶段切换：`references/主控决策协议.md`
@@ -18,14 +21,15 @@
    - 可编辑 PPT：`references/可编辑PPT路线.md`
    - 阶段3文字填字规划：`references/阶段3文字填字规划规范.md`
    - 阶段3插件主控和证据回写：`references/阶段3插件主控与可编辑PPT规范.md`
-   - 质量审查：`references/质量审查标准.md`
+   - QA 和 doctor 分层：`references/QA与doctor规范.md`
+   - 质量审查细项：`references/质量审查标准.md`
    - 阶段4演讲稿输出：`references/阶段4演讲稿输出规范.md`
 4. 只有用户明确要求维护 Skill 结构、文档、模板或工具时，才修改本目录。
 
 ## 防止误调用
 
 - 不要因为进入本目录就启动 PPT 生成。
-- 不要把 `ppt-skill-v2/` 当作具体 PPT 项目。
+- 不要把当前 Skill 根目录当作具体 PPT 项目，无论目录名里写的是 v2、v3 还是 Codex 可编辑。
 - 不要在 Skill 根目录下创建阶段0到阶段4的项目产物。
 - 不要运行会生成图片、PPT、交付包或推进阶段的命令，除非用户明确要求生成具体 PPT。
 - 任何具体 PPT/PPTX 生成、改造、审查、可编辑化或演讲稿输出，包括已有 PPTX 的“内容不变/内容不要大改/优化视觉/美化/升级/可编辑优化/先做一版”，都必须走 `SKILL.md` 定义的四阶段流程。
@@ -75,6 +79,7 @@ _decisions/
 ## 修改本 Skill 时
 
 - 保持 `SKILL.md` 简短，只放主控原则和 reference 路由。
+- 稳定调用名、runtime package、schema id 和旧项目状态字段继续沿用 `ppt-skill-v2` / `ppt_skill_v2`；除非用户明确要求做版本迁移，不要顺手重命名。
 - 详细规则放到 `references/`，文件名和正文尽量用中文。
 - 开发任务卡、历史验收记录、已完成规划、测试源码、dev smoke、缓存和废弃文件放到 `docs/archive/`，不要放进正式 `references/` 或 Skill 根目录。
 - 模板放到 `assets/templates/`，模板内容不能冒充正式阶段产物。

@@ -21,6 +21,8 @@
 
 旧 `visual_slot_map + text_fill_plan 3.0 + preflight-stage3-overlay` 不再是本 Skill 的正式路线。旧产物只可作为历史排查资料，不能作为新项目通过依据。
 
+可使用 `create-text-ownership-map-draft` 和 `create-editable-coordinate-plan-draft` 生成草稿以减少手写负担；draft 只能作为主控复核起点，`basis.status=draft` 的 coordinate plan 不能直接正式入账，必须由主控替换真实坐标并改成已复核版本后再运行 `record-editable-coordinate-plan`。
+
 ## 核心红线
 
 - 必须从用户确认过的阶段2图片精准恢复文字几何坐标；`source_image.path` 必须指向阶段2确认图。
@@ -37,10 +39,10 @@
 ## 阶段3顺序
 
 1. 主控写 `_state/阶段3/text_unit_split_plan.json`，用阶段1每页干净逐字稿确认可编辑文字拆分粒度。
-2. 主控写 `_state/阶段3/text_ownership_map.json`，明确页面信息文字和视觉内部文字的归属；如果 split plan 存在，ownership 必须通过 `split_unit_id` 承接可编辑 split units。
+2. 可运行 `create-text-ownership-map-draft` 生成 ownership 草稿，主控复核页面信息文字和视觉内部文字的归属后，再用 `record-text-ownership-map` 正式入账；如果 split plan 存在，ownership 必须通过 `split_unit_id` 承接可编辑 split units。
 3. 用 `dispatch-image-generation --stage stage3-background`（默认 `codex_image_gen`）或显式 `dispatch-image-api --stage stage3-background` 基于 ownership map 派生 `restore_targets`，生成保真去字背景。
 4. 高风险页选择 1 页跑真实 OfficeCLI native style probe，并记录 `_state/阶段3/font_calibration_profile.json`；probe 结论用于主控校准，未 passed 时坐标计划可先记录但必须带 warning。
-5. 基于阶段2确认图精准识别/标注坐标，主控写 `_state/阶段3/editable_coordinate_plan.json`，每个独立视觉文本对象一个 `text_unit`，绑定 `ownership_id`、`split_unit_id`、`style_profile_id`、准确文字、几何来源、`box_px`、`relative_box`、字体、段落和 fit policy。
+5. 可运行 `create-editable-coordinate-plan-draft` 基于 ownership、阶段2确认图和阶段3背景结果生成坐标草稿和预览；主控必须把草稿占位框替换为阶段2确认图上的真实文字坐标，确认不是 draft 后再用 `record-editable-coordinate-plan` 正式入账。
 6. 运行 `build-stage3-quality-profile`，必要时再运行 `create-stage3-controller-review-plan-draft`，由主控复核密集页、未解决 warning、possible merged、native style probe 建议和 QA 高风险页候选；如决定不采纳建议，在 review plan 或 QA optional 字段中说明取舍。
 7. 把文字坐标复刻结果交给用户确认；用户确认无误并记录 `approve_stage3_coordinate_plan_start_text_fill` 后，才进入填字。
 8. 运行 `build-editable-brief`，brief 引用 split plan、ownership map、font profile 和用户确认后的 coordinate plan。

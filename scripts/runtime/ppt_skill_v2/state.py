@@ -91,6 +91,14 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
             "stage4_speaker_script_manifest": "_state/阶段4/speaker_script_manifest.json",
             "stage4_speaker_script_qa": "_state/阶段4/speaker_script_qa.json",
         },
+        "control_artifacts": {
+            "resume_brief": "_state/control/resume_brief.json",
+            "resume_brief_markdown": "_state/control/resume_brief.md",
+            "next_action": "_state/control/next_action.json",
+            "drift_check": "_state/control/drift_check.json",
+            "active_work_packet": "_state/control/active_work_packet.json",
+            "work_packets_dir": "_state/control/work_packets",
+        },
         "quality": {
             "stage1": "not_started",
             "stage2": "not_started",
