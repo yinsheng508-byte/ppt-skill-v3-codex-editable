@@ -8,6 +8,7 @@ from typing import Sequence
 from .decisions import execute_decision, load_decision, record_decision
 from .decision_factory import make_decision
 from .control import build_next_action, build_resume_brief, render_resume_brief_markdown
+from .canva_task import create_canva_task_brief
 from .cover_options import dispatch_cover_option_packets, promote_selected_cover_option
 from .coordinate_preview import build_coordinate_preview
 from .doctor import check_project
@@ -94,6 +95,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sync_parser = subparsers.add_parser("sync-stage-docs", help="Refresh user-facing stage docs.")
     sync_parser.add_argument("--run-dir", required=True)
+    canva_task_parser = subparsers.add_parser("create-canva-task-brief", help="Create a stage-external Canva auxiliary edit task brief.")
+    canva_task_parser.add_argument("--run-dir", required=True)
+    canva_task_parser.add_argument("--task-id")
+    canva_task_parser.add_argument("--trigger", default="/canva")
     validate_stage1_parser = subparsers.add_parser("validate-stage1", help="Validate controller-authored stage1 plan.")
     validate_stage1_parser.add_argument("--run-dir", required=True)
     layout_safety_parser = subparsers.add_parser("record-layout-safety-contract", help="Record controller-authored stage1 layout safety contract.")
@@ -362,6 +367,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "sync-stage-docs":
         sync_stage_docs(args.run_dir)
         print(json.dumps({"status": "synced", "run_dir": args.run_dir}, ensure_ascii=False))
+        return 0
+    if args.command == "create-canva-task-brief":
+        result = create_canva_task_brief(args.run_dir, task_id=args.task_id, trigger=args.trigger)
+        print(json.dumps(result, ensure_ascii=False))
         return 0
     if args.command == "add-material":
         record = add_material(

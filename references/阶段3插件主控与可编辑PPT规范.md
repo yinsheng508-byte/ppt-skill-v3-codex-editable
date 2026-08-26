@@ -4,6 +4,8 @@
 
 文件名保留“插件主控”仅为兼容既有 SKILL 路由；正文正式口径以 OfficeCLI-only 为准。
 
+`/canva`、`/可画` 触发的 Canva 辅助编辑任务是阶段外工具任务，不适用本文件的阶段3执行和验收口径。Canva Magic Layers、Canva 设计链接和 Canva 插件批量改字记录都不能作为阶段3正式可编辑 PPT 的 provider evidence 或通过依据；相关操作应读取 `Canva辅助编辑任务规范.md`。
+
 ## 责任边界
 
 主控大模型负责：

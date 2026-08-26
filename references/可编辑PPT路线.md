@@ -21,6 +21,8 @@
 
 旧 `visual_slot_map + text_fill_plan 3.0 + preflight-stage3-overlay` 不再是本 Skill 的正式路线。旧产物只可作为历史排查资料，不能作为新项目通过依据。
 
+`/canva`、`/可画` 触发的 Canva Magic Layers 辅助编辑任务不属于阶段3正式路线。Canva 链接、Canva 设计、Magic Layers 结果或 Canva 插件修改记录都不能替代阶段3 PPTX、OfficeCLI provider evidence、readback、render review、coordinate execution report 和坐标 QA v2。
+
 可使用 `create-text-ownership-map-draft` 和 `create-editable-coordinate-plan-draft` 生成草稿以减少手写负担；draft 只能作为主控复核起点，`basis.status=draft` 的 coordinate plan 不能直接正式入账，必须由主控替换真实坐标并改成已复核版本后再运行 `record-editable-coordinate-plan`。
 
 ## 核心红线

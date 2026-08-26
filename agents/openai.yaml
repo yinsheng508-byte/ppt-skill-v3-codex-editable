@@ -1,6 +1,6 @@
 interface:
   display_name: "PPT Skill v2（Codex 可编辑）"
-  short_description: "稳定调用名 ppt-skill-v2；支持中文PPT主控生成、四封面选风格、可编辑PPT与演讲稿输出。"
-  default_prompt: "Use $ppt-skill-v2 按阶段0资料整理、阶段1规划确认、阶段2四封面风格候选与图片版PDF、阶段3可编辑PPT、阶段4演讲稿Word/PDF输出来完成这个 PPT 项目。"
+  short_description: "稳定调用名 ppt-skill-v2；默认四阶段做中文PPT，/canva 或 /可画 走阶段外 Canva 辅助编辑。"
+  default_prompt: "Use $ppt-skill-v2 默认按阶段0资料整理、阶段1规划确认、阶段2图片版PDF、阶段3可编辑PPT、阶段4演讲稿Word/PDF完成 PPT 项目；/canva 或 /可画 只作为 Canva 辅助编辑。"
 policy:
   allow_implicit_invocation: true

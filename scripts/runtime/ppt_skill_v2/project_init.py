@@ -41,6 +41,7 @@ def create_project(project_name: str, output_root: str | Path) -> Path:
         "阶段0/提取文本",
         "阶段0/提取文本/ocr_raw",
         "阶段0/网页资料/微信公众号",
+        "工具任务/canva",
         "阶段1",
         "阶段2/packets",
         "阶段2/prompts",

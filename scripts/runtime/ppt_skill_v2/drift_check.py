@@ -14,7 +14,15 @@ from .time_utils import now_iso
 
 READ_ONLY_ACTIONS = {"status", "doctor", "resume_brief", "next_action", "drift_check"}
 DECISION_ACTIONS = {"record_decision", "execute_decision"}
+BROAD_ACTION_RULES: dict[str, dict[str, Any]] = {
+    "stage1_plan": {"stages": {"stage0", "stage1"}, "actor": "main_controller"},
+    "stage2_image": {"stages": {"stage2"}, "actor": "main_controller", "requires_confirmed": "stage1_plan"},
+    "stage3_editable": {"stages": {"stage3"}, "actor": "main_controller", "requires_confirmed": "stage2_image_deck"},
+    "stage4_script": {"stages": {"stage4"}, "actor": "main_controller", "requires_locked_source": True},
+    "canva_auxiliary": {"actor": "main_controller", "sidecar": True},
+}
 STAGE3_ACTIONS = {
+    "stage3_editable",
     "dispatch_stage3_background_packets",
     "record_text_unit_split_plan",
     "record_text_ownership_map",
@@ -100,8 +108,12 @@ def run_drift_check(run_dir: str | Path, *, action: str | None = None, persist: 
 def _check_action(root: Path, state: dict[str, Any], action: str, issues: list[str], warnings: list[str]) -> None:
     if action in READ_ONLY_ACTIONS:
         return
-    if state.get("required_actor") == "user" and action not in DECISION_ACTIONS:
+    if state.get("required_actor") == "user" and action not in DECISION_ACTIONS and action != "canva_auxiliary":
         issues.append(f"当前 required_actor=user，必须等待用户确认或记录用户反馈 decision，不能执行 {action}")
+    broad_rule = BROAD_ACTION_RULES.get(action)
+    if broad_rule is not None:
+        _check_broad_action(state, action, broad_rule, issues, warnings)
+        return
     rule = ACTION_RULES.get(action)
     if rule is None:
         warnings.append(f"未配置 action 状态矩阵：{action}；仅执行通用防漂移检查")
@@ -126,6 +138,36 @@ def _check_action(root: Path, state: dict[str, Any], action: str, issues: list[s
         issues.append("阶段4缺少 stage4_locked_presentation_source，不能生成讲稿")
     if action in {"record_decision", "execute_decision"} and state.get("required_actor") == "user":
         warnings.append("当前等待用户确认；record/execute decision 前必须确认 decision.user_confirmed 与用户真实反馈一致")
+
+
+def _check_broad_action(
+    state: dict[str, Any],
+    action: str,
+    rule: dict[str, Any],
+    issues: list[str],
+    warnings: list[str],
+) -> None:
+    stages = rule.get("stages")
+    if isinstance(stages, set) and state.get("current_stage") not in stages:
+        allowed = ", ".join(sorted(stages))
+        issues.append(f"{action} 适用于 {allowed}，当前 current_stage={state.get('current_stage')}")
+    expected_actor = rule.get("actor")
+    if expected_actor and state.get("required_actor") != expected_actor:
+        if action == "canva_auxiliary" and state.get("required_actor") == "user":
+            warnings.append("当前项目正在等待用户确认；Canva 辅助任务可以继续作为阶段外任务，但不能推进阶段状态")
+        else:
+            issues.append(f"{action} 需要 required_actor={expected_actor}，当前 required_actor={state.get('required_actor')}")
+    confirmed = state.get("confirmed") if isinstance(state.get("confirmed"), dict) else {}
+    required_confirmation = rule.get("requires_confirmed")
+    if isinstance(required_confirmation, str) and not confirmed.get(required_confirmation):
+        issues.append(f"{action} 缺少确认：{required_confirmation}")
+    if rule.get("requires_locked_source") and not state.get("stage4_locked_presentation_source"):
+        issues.append("阶段4缺少 stage4_locked_presentation_source，不能生成讲稿")
+    if action == "canva_auxiliary":
+        if not confirmed.get("stage1_plan"):
+            warnings.append("Canva 辅助任务缺少已确认阶段1文案时，只能做有限错别字检查")
+        if not confirmed.get("stage2_image_deck"):
+            warnings.append("Canva 辅助任务缺少已确认阶段2图片版 PDF 时，只能参考已有视觉稿，不能视为正式锁稿")
 
 
 def _check_stage3_drift(root: Path, state: dict[str, Any], action: str | None, issues: list[str], warnings: list[str]) -> None:

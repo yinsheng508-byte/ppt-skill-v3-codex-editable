@@ -12,6 +12,7 @@ from .validation import ValidationError
 ALLOWED_TOP_LEVEL = {
     "SKILL.md",
     "AGENTS.md",
+    "CHANGELOG.md",
     "agents",
     "references",
     "assets",

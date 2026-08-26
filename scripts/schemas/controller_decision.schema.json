@@ -37,6 +37,7 @@
         "approve_stage2_start_stage3",
         "approve_stage2_skip_stage3_start_script_output",
         "request_stage2_revision",
+        "reopen_stage3_sample_after_stage4",
         "approve_stage3_coordinate_plan_start_text_fill",
         "request_stage3_coordinate_plan_revision",
         "stage3_ready_for_user_review",
