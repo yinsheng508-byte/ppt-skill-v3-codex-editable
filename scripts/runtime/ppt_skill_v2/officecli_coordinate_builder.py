@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from .deliverable_naming import LEGACY_STAGE3_EDITABLE_PPTX_REL, project_deliverable_relpaths
 from .editable_coordinate_plan import (
     load_editable_coordinate_plan,
     require_coordinate_plan_background_alignment,
@@ -32,7 +33,7 @@ from .time_utils import now_iso
 from .validation import ValidationError, require_matching_slide_indices, validate_stage1_plan
 
 
-OFFICECLI_DECK_REL_PATH = "阶段3_可编辑PPT/ppt/可编辑PPT.pptx"
+OFFICECLI_DECK_REL_PATH = LEGACY_STAGE3_EDITABLE_PPTX_REL
 OFFICECLI_MANIFEST_REL_PATH = "_state/阶段3/manifests/officecli_manifest.json"
 OFFICECLI_COMMANDS_REL_PATH = "_state/阶段3/officecli/commands/build_deck.batch.json"
 OFFICECLI_RESULT_REL_PATH = "_state/阶段3/officecli/commands/build_deck.result.json"
@@ -65,7 +66,7 @@ def build_officecli_coordinate_deck(
     require_coordinate_plan_background_alignment(root, plan)
 
     selected_plan_slides = _selected_slides(plan["slides"], mode=mode, probe_slide_index=probe_slide_index)
-    output_path = _output_path(root, output_file, mode=mode, probe_slide_index=probe_slide_index)
+    output_path = _output_path(root, output_file, mode=mode, probe_slide_index=probe_slide_index, state=state)
     work_pptx = root / OFFICECLI_WORK_PPTX_REL_PATH if mode == "full_deck" else root / "_state" / "阶段3" / "officecli" / "probe" / f"probe_slide_{probe_slide_index:03d}.pptx"
     commands, manifest_parts = _build_commands(root, selected_plan_slides)
 
@@ -151,12 +152,19 @@ def _selected_slides(
     return selected
 
 
-def _output_path(root: Path, output_file: str | Path | None, *, mode: str, probe_slide_index: int | None) -> Path:
+def _output_path(
+    root: Path,
+    output_file: str | Path | None,
+    *,
+    mode: str,
+    probe_slide_index: int | None,
+    state: dict[str, Any] | None = None,
+) -> Path:
     if output_file is not None:
         path = Path(output_file)
         return path if path.is_absolute() else root / path
     if mode == "full_deck":
-        return root / OFFICECLI_DECK_REL_PATH
+        return root / project_deliverable_relpaths(root, state=state)["stage3_editable_deck"]
     return root / "阶段3_可编辑PPT" / "native_style_probe" / f"probe_slide_{probe_slide_index:03d}.pptx"
 
 

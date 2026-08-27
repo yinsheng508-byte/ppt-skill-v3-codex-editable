@@ -5,6 +5,7 @@ from typing import Any
 
 from PIL import Image, ImageOps
 
+from .deliverable_naming import LEGACY_STAGE2_IMAGE_PDF_REL, project_deliverable_relpaths
 from .dev_mode import require_dev_fixture_enabled
 from .events import append_event
 from .json_io import read_json, write_json
@@ -18,7 +19,7 @@ from .validation import ValidationError, validate_image_result, validate_stage1_
 
 PDF_CANVAS_SIZE = (1600, 900)
 PDF_RESOLUTION_DPI = 120
-STAGE2_PDF_REL_PATH = "阶段2_图片版PPT/pdf/图片版PPT.pdf"
+STAGE2_PDF_REL_PATH = LEGACY_STAGE2_IMAGE_PDF_REL
 
 
 def build_image_deck(run_dir: str | Path, *, allow_dev_fixture: bool = False) -> Path:
@@ -39,7 +40,9 @@ def build_image_deck(run_dir: str | Path, *, allow_dev_fixture: bool = False) ->
     if not pages:
         raise ValidationError("image deck requires at least one stage2 image")
 
-    deck_path = root / STAGE2_PDF_REL_PATH
+    relpaths = project_deliverable_relpaths(root, state=state)
+    deck_rel = relpaths["stage2_image_deck"]
+    deck_path = root / deck_rel
     deck_path.parent.mkdir(parents=True, exist_ok=True)
     first_page, *rest_pages = pages
     try:
@@ -54,8 +57,9 @@ def build_image_deck(run_dir: str | Path, *, allow_dev_fixture: bool = False) ->
         "run_dir": state["run_dir"],
         "artifact_type": "stage2_image_pdf",
         "output_format": "pdf",
-        "deck_path": STAGE2_PDF_REL_PATH,
-        "pdf_path": STAGE2_PDF_REL_PATH,
+        "deck_path": deck_rel,
+        "pdf_path": deck_rel,
+        "legacy_pdf_path": STAGE2_PDF_REL_PATH,
         "slides_count": len(results),
         "page_size": {"width_px": PDF_CANVAS_SIZE[0], "height_px": PDF_CANVAS_SIZE[1], "resolution_dpi": PDF_RESOLUTION_DPI},
         "images": [result["image_path"] for result in results],
@@ -73,7 +77,8 @@ def build_image_deck(run_dir: str | Path, *, allow_dev_fixture: bool = False) ->
 
     state["status"] = "waiting_user_confirmation"
     state["required_actor"] = "user"
-    state["user_artifacts"]["stage2_image_deck"] = STAGE2_PDF_REL_PATH
+    state.setdefault("user_artifacts", {})["stage2_image_deck"] = deck_rel
+    state.setdefault("expected_user_paths", {})["stage2_image_deck"] = deck_rel
     state["quality"]["stage2"] = "pending_user_review"
     state["next_required_action"] = "等待用户确认阶段2图片版 PDF"
     write_state(root, state)

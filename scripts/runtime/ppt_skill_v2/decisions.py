@@ -4,6 +4,11 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from .deliverable_naming import (
+    LEGACY_STAGE2_IMAGE_PDF_REL,
+    existing_stage2_image_pdf_rel,
+    existing_stage4_output_rel,
+)
 from .events import append_event
 from .json_io import read_json, write_json
 from .paths import decision_path, decisions_dir
@@ -127,20 +132,20 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         state["quality"]["stage2_trial_first5"] = "needs_revision"
         state["next_required_action"] = "主控大模型返工阶段2设计规划、layout_intent 或提示词；除非用户明确改内容，不修改阶段1任务"
     elif decision_type == "stage2_ready_for_user_review":
-        _require_file_exists(
-            run_dir,
-            "阶段2_图片版PPT/pdf/图片版PPT.pdf",
-            "stage2 image PDF is required before stage2 user review",
-        )
+        stage2_pdf = _require_stage2_image_pdf(run_dir, state, "stage2 image PDF is required before stage2 user review")
         state["current_stage"] = "stage2"
         state["status"] = "waiting_user_confirmation"
         state["required_actor"] = "user"
+        state.setdefault("user_artifacts", {})["stage2_image_deck"] = stage2_pdf
+        state.setdefault("expected_user_paths", {})["stage2_image_deck"] = stage2_pdf
         state["quality"]["stage2"] = "pending_user_review"
         state["next_required_action"] = "等待用户确认阶段2图片版 PDF"
     elif decision_type == "approve_stage2_start_stage3":
         _require_state_status(state, "waiting_user_confirmation", decision_type)
-        _require_file_exists(run_dir, "阶段2_图片版PPT/pdf/图片版PPT.pdf", "stage2 image PDF is required before approving stage2")
+        stage2_pdf = _require_stage2_image_pdf(run_dir, state, "stage2 image PDF is required before approving stage2")
         state["confirmed"]["stage2_image_deck"] = True
+        state.setdefault("user_artifacts", {})["stage2_image_deck"] = stage2_pdf
+        state.setdefault("expected_user_paths", {})["stage2_image_deck"] = stage2_pdf
         state["current_stage"] = "stage3"
         state["status"] = "ready_for_stage3"
         state["required_actor"] = "main_controller"
@@ -148,9 +153,11 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         state["next_required_action"] = "由主控大模型显式分发阶段3无字背景任务"
     elif decision_type == "approve_stage2_skip_stage3_start_script_output":
         _require_state_status(state, "waiting_user_confirmation", decision_type)
-        _require_file_exists(run_dir, "阶段2_图片版PPT/pdf/图片版PPT.pdf", "stage2 image PDF is required before skipping stage3")
+        stage2_pdf = _require_stage2_image_pdf(run_dir, state, "stage2 image PDF is required before skipping stage3")
         locked_source = _stage4_locked_source_from_decision(run_dir, decision)
         state["confirmed"]["stage2_image_deck"] = True
+        state.setdefault("user_artifacts", {})["stage2_image_deck"] = stage2_pdf
+        state.setdefault("expected_user_paths", {})["stage2_image_deck"] = stage2_pdf
         state["confirmed"]["stage3_coordinate_plan"] = False
         state["confirmed"]["stage3_editable_deck"] = False
         state["current_stage"] = "stage4"
@@ -169,7 +176,7 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         state["next_required_action"] = "主控大模型组织阶段2返工"
     elif decision_type == "reopen_stage3_sample_after_stage4":
         _require_state_status(state, "completed", decision_type)
-        _require_file_exists(run_dir, "阶段2_图片版PPT/pdf/图片版PPT.pdf", "stage2 image PDF is required before reopening stage3")
+        _require_stage2_image_pdf(run_dir, state, "stage2 image PDF is required before reopening stage3")
         scope = _stage3_sample_scope_from_decision(decision)
         state["confirmed"]["stage3_coordinate_plan"] = False
         state["confirmed"]["stage3_editable_deck"] = False
@@ -227,13 +234,16 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         if not decision.get("controller_reviewed"):
             raise ValidationError("stage4_script_completed requires controller_reviewed=true")
         _require_file_exists(run_dir, "_state/阶段4/speaker_script_manifest.json", "speaker script manifest is required before completing stage4")
-        _require_file_exists(run_dir, "阶段4_演讲稿输出/演讲逐字稿.md", "speaker script markdown is required before completing stage4")
-        _require_file_exists(run_dir, "阶段4_演讲稿输出/docx/演讲逐字稿.docx", "speaker script DOCX is required before completing stage4")
-        _require_file_exists(run_dir, "阶段4_演讲稿输出/pdf/演讲逐字稿.pdf", "speaker script PDF is required before completing stage4")
+        stage4_markdown = _require_stage4_output(run_dir, state, "stage4_speaker_script", "speaker script markdown is required before completing stage4")
+        stage4_docx = _require_stage4_output(run_dir, state, "stage4_speaker_script_docx", "speaker script DOCX is required before completing stage4")
+        stage4_pdf = _require_stage4_output(run_dir, state, "stage4_speaker_script_pdf", "speaker script PDF is required before completing stage4")
         state["confirmed"]["stage4_speaker_script"] = True
-        state["user_artifacts"]["stage4_speaker_script"] = "阶段4_演讲稿输出/演讲逐字稿.md"
-        state["user_artifacts"]["stage4_speaker_script_docx"] = "阶段4_演讲稿输出/docx/演讲逐字稿.docx"
-        state["user_artifacts"]["stage4_speaker_script_pdf"] = "阶段4_演讲稿输出/pdf/演讲逐字稿.pdf"
+        state.setdefault("user_artifacts", {})["stage4_speaker_script"] = stage4_markdown
+        state["user_artifacts"]["stage4_speaker_script_docx"] = stage4_docx
+        state["user_artifacts"]["stage4_speaker_script_pdf"] = stage4_pdf
+        state.setdefault("expected_user_paths", {})["stage4_speaker_script"] = stage4_markdown
+        state["expected_user_paths"]["stage4_speaker_script_docx"] = stage4_docx
+        state["expected_user_paths"]["stage4_speaker_script_pdf"] = stage4_pdf
         state["current_stage"] = "stage4"
         state["status"] = "completed"
         state["required_actor"] = "none"
@@ -283,6 +293,20 @@ def _require_stage1_validated(run_dir: str | Path) -> None:
 def _require_file_exists(run_dir: str | Path, relpath: str, message: str) -> None:
     if not (Path(run_dir) / relpath).exists():
         raise ValidationError(message)
+
+
+def _require_stage2_image_pdf(run_dir: str | Path, state: dict[str, Any], message: str) -> str:
+    relpath = existing_stage2_image_pdf_rel(run_dir, state)
+    if not relpath:
+        raise ValidationError(message)
+    return relpath
+
+
+def _require_stage4_output(run_dir: str | Path, state: dict[str, Any], artifact_key: str, message: str) -> str:
+    relpath = existing_stage4_output_rel(run_dir, artifact_key, state=state)
+    if not relpath:
+        raise ValidationError(message)
+    return relpath
 
 
 def _stage3_sample_scope_from_decision(decision: dict[str, Any]) -> dict[str, Any]:
@@ -341,14 +365,16 @@ def _stage3_locked_source(manifest: dict[str, Any]) -> dict[str, str]:
 
 def _stage4_locked_source_from_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str, str]:
     basis = decision.get("basis", {})
+    state = read_state(run_dir)
+    default_stage2_source = existing_stage2_image_pdf_rel(run_dir, state) or LEGACY_STAGE2_IMAGE_PDF_REL
     candidate = basis.get("locked_presentation_source") if isinstance(basis, dict) else None
     if isinstance(candidate, dict):
         mode = candidate.get("source_mode") or "stage2_image_deck"
-        source_path = candidate.get("source_path") or "阶段2_图片版PPT/pdf/图片版PPT.pdf"
+        source_path = candidate.get("source_path") or default_stage2_source
         confirmation_basis = candidate.get("confirmation_basis") or str(basis.get("notes") or "")
     else:
         mode = "stage2_image_deck"
-        source_path = "阶段2_图片版PPT/pdf/图片版PPT.pdf"
+        source_path = default_stage2_source
         confirmation_basis = str(basis.get("notes") or "用户确认阶段2图片版 PDF 可作为阶段4讲稿锁定稿。")
     if mode not in {"stage2_image_deck", "external_editable_deck"}:
         raise ValidationError("approve_stage2_skip_stage3_start_script_output supports stage2_image_deck or external_editable_deck only")
@@ -363,8 +389,9 @@ def _stage4_locked_source_from_decision(run_dir: str | Path, decision: dict[str,
         "source_sha256": _file_sha256(resolved),
         "confirmation_basis": confirmation_basis,
     }
-    if mode == "stage2_image_deck" and source_path != "阶段2_图片版PPT/pdf/图片版PPT.pdf":
-        raise ValidationError("stage2_image_deck locked source must be 阶段2_图片版PPT/pdf/图片版PPT.pdf")
+    known_stage2_source = existing_stage2_image_pdf_rel(run_dir, state)
+    if mode == "stage2_image_deck" and known_stage2_source and source_path != known_stage2_source:
+        raise ValidationError(f"stage2_image_deck locked source must be {known_stage2_source}")
     return locked_source
 
 

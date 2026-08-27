@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .dev_mode import require_dev_fixture_enabled
+from .deliverable_naming import project_deliverable_relpaths
 from .events import append_event
 from .json_io import read_json
 from .planning_assets import (
@@ -141,6 +142,7 @@ def _render_brief(
     probe = font_profile.get("render_probe", {}) if isinstance(font_profile, dict) else {}
     probe_basis = font_profile.get("basis", {}) if isinstance(font_profile, dict) else {}
     native_style_probe = root / "_state" / "阶段3" / "officecli" / "probe" / "native_style_probe.json"
+    editable_deck_rel = project_deliverable_relpaths(root, state=state)["stage3_editable_deck"]
     lines = [
         "# OfficeCLI 可编辑 PPT 生成 Brief",
         "",
@@ -164,7 +166,7 @@ def _render_brief(
         "- 约束：只允许生成 coordinate plan 指定的少量 native_elements；复杂插画、人物、照片或复杂图表保留在背景图中。",
         "- 约束：执行顺序为 background image -> native_elements under_text -> coordinate text units -> native_elements over_text。",
         "- 约束：PPT 画布必须按每页 `coordinate_canvas` 或等比例 16:9 完整铺底计算；所有文本框使用同一画布基准换算。",
-        "- 输出：阶段3_可编辑PPT/ppt/可编辑PPT.pptx",
+        f"- 输出：{editable_deck_rel}",
         "- 输出：_state/阶段3/text_fill_execution_report.json，schema_version=2.0，覆盖全部 coordinate text units，且 `actual_source=pptx_ooxml`。",
         "- 输出：_state/阶段3/officecli/readback/build_deck.readback.json",
         "- 输出：_state/阶段3/render_review/ 下的渲染图和 contact sheet",

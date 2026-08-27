@@ -17,6 +17,12 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
+from .deliverable_naming import (
+    LEGACY_STAGE4_DOCX_REL,
+    LEGACY_STAGE4_MARKDOWN_REL,
+    LEGACY_STAGE4_PDF_REL,
+    project_deliverable_relpaths,
+)
 from .events import append_event
 from .json_io import read_json, write_json
 from .state import read_state, write_state
@@ -26,9 +32,9 @@ from .validation import ValidationError, validate_speaker_script, validate_speak
 
 USER_DIR = "阶段4_演讲稿输出"
 STATE_DIR = "_state/阶段4"
-MARKDOWN_REL = f"{USER_DIR}/演讲逐字稿.md"
-DOCX_REL = f"{USER_DIR}/docx/演讲逐字稿.docx"
-PDF_REL = f"{USER_DIR}/pdf/演讲逐字稿.pdf"
+MARKDOWN_REL = LEGACY_STAGE4_MARKDOWN_REL
+DOCX_REL = LEGACY_STAGE4_DOCX_REL
+PDF_REL = LEGACY_STAGE4_PDF_REL
 NOTE_REL = f"{USER_DIR}/讲稿生成说明.md"
 SCRIPT_JSON_REL = f"{STATE_DIR}/speaker_script.json"
 MANIFEST_REL = f"{STATE_DIR}/speaker_script_manifest.json"
@@ -54,6 +60,11 @@ def build_speaker_script(run_dir: str | Path, script_json: str | Path) -> dict[s
     _require_locked_source_exists(root, locked_source)
     _require_locked_source_matches_state(state, locked_source)
 
+    relpaths = project_deliverable_relpaths(root, state=state, script=script)
+    markdown_rel = relpaths["stage4_speaker_script"]
+    docx_rel = relpaths["stage4_speaker_script_docx"]
+    pdf_rel = relpaths["stage4_speaker_script_pdf"]
+
     (root / USER_DIR / "docx").mkdir(parents=True, exist_ok=True)
     (root / USER_DIR / "pdf").mkdir(parents=True, exist_ok=True)
     (root / STATE_DIR / "pdf_conversion").mkdir(parents=True, exist_ok=True)
@@ -61,9 +72,14 @@ def build_speaker_script(run_dir: str | Path, script_json: str | Path) -> dict[s
 
     write_json(root / SCRIPT_JSON_REL, script)
     markdown = _render_markdown(script)
-    (root / MARKDOWN_REL).write_text(markdown, encoding="utf-8")
-    _render_docx(script, root / DOCX_REL)
-    conversion = _build_pdf(root / DOCX_REL, root / PDF_REL, script)
+    (root / markdown_rel).write_text(markdown, encoding="utf-8")
+    _render_docx(script, root / docx_rel)
+    conversion = _build_pdf(root / docx_rel, root / pdf_rel, script)
+    conversion["pdf_path"] = pdf_rel
+    if conversion.get("paired_docx"):
+        conversion["paired_docx"] = docx_rel
+    if conversion.get("source") in {DOCX_REL, str(root / DOCX_REL)}:
+        conversion["source"] = docx_rel
     script_character_count = _script_character_count(script)
 
     manifest = validate_speaker_script_manifest(
@@ -72,17 +88,17 @@ def build_speaker_script(run_dir: str | Path, script_json: str | Path) -> dict[s
             "project_name": state["project_name"],
             "run_dir": state["run_dir"],
             "files": [
-                _file_entry("Markdown 逐字稿", root, MARKDOWN_REL),
-                _file_entry("Word 逐字稿", root, DOCX_REL),
-                _file_entry("PDF 逐字稿", root, PDF_REL),
+                _file_entry("Markdown 逐字稿", root, markdown_rel),
+                _file_entry("Word 逐字稿", root, docx_rel),
+                _file_entry("PDF 逐字稿", root, pdf_rel),
             ],
             "conversion": conversion,
             "summary": {
                 "slides": len(script["slides"]),
                 "script_characters": script_character_count,
                 "estimated_minutes": _estimate_minutes(script_character_count),
-                "pdf_pages": _pdf_page_count(root / PDF_REL),
-                "pdf_text_probe": _pdf_text_probe(root / PDF_REL),
+                "pdf_pages": _pdf_page_count(root / pdf_rel),
+                "pdf_text_probe": _pdf_text_probe(root / pdf_rel),
                 "first_page_header_mode": "inline_top_header_no_cover_page",
                 "docx_font_family": FONT_FAMILY,
                 "docx_language": "zh-CN",
@@ -98,9 +114,12 @@ def build_speaker_script(run_dir: str | Path, script_json: str | Path) -> dict[s
 
     state["status"] = "stage4_script_generated"
     state["required_actor"] = "main_controller"
-    state["user_artifacts"]["stage4_speaker_script"] = MARKDOWN_REL
-    state["user_artifacts"]["stage4_speaker_script_docx"] = DOCX_REL
-    state["user_artifacts"]["stage4_speaker_script_pdf"] = PDF_REL
+    state.setdefault("user_artifacts", {})["stage4_speaker_script"] = markdown_rel
+    state["user_artifacts"]["stage4_speaker_script_docx"] = docx_rel
+    state["user_artifacts"]["stage4_speaker_script_pdf"] = pdf_rel
+    state.setdefault("expected_user_paths", {})["stage4_speaker_script"] = markdown_rel
+    state["expected_user_paths"]["stage4_speaker_script_docx"] = docx_rel
+    state["expected_user_paths"]["stage4_speaker_script_pdf"] = pdf_rel
     state["quality"]["stage4"] = "pending_controller_review"
     state["next_required_action"] = "主控大模型检查阶段4讲稿、Word 和 PDF；通过后记录 stage4_script_completed 决策"
     write_state(root, state)
@@ -361,12 +380,15 @@ def _add_field(paragraph, instruction: str) -> None:
 
 
 def _build_pdf(docx_path: Path, pdf_path: Path, script: dict[str, Any]) -> dict[str, Any]:
+    root = Path(script["run_dir"])
+    docx_rel = _relative_or_absolute(root, docx_path)
+    pdf_rel = _relative_or_absolute(root, pdf_path)
     try:
         font_path = _render_pdf_with_reportlab(script, pdf_path)
         return {
             "source": SCRIPT_JSON_REL,
-            "paired_docx": DOCX_REL,
-            "pdf_path": PDF_REL,
+            "paired_docx": docx_rel,
+            "pdf_path": pdf_rel,
             "tool": "reportlab",
             "font_path": str(font_path),
         }
@@ -395,9 +417,9 @@ def _build_pdf(docx_path: Path, pdf_path: Path, script: dict[str, Any]) -> dict[
     if not pdf_path.exists():
         raise ValidationError("DOCX to PDF conversion did not create the expected PDF")
     return {
-        "source": DOCX_REL,
-        "paired_docx": DOCX_REL,
-        "pdf_path": PDF_REL,
+        "source": docx_rel,
+        "paired_docx": docx_rel,
+        "pdf_path": pdf_rel,
         "tool": "soffice",
         "tool_path": soffice,
         "fallback_reason": reportlab_note,
@@ -409,6 +431,8 @@ def _try_external_reportlab_pdf(
     pdf_path: Path, script: dict[str, Any], primary_error: str
 ) -> tuple[dict[str, Any] | None, str | None]:
     root = Path(script["run_dir"])
+    pdf_rel = _relative_or_absolute(root, pdf_path)
+    docx_rel = project_deliverable_relpaths(root, script=script)["stage4_speaker_script_docx"]
     payload_path = root / STATE_DIR / "pdf_conversion" / "reportlab_payload.json"
     payload_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(payload_path, script)
@@ -439,8 +463,8 @@ print(json.dumps({{"font_path": str(font_path)}}, ensure_ascii=False))
             return (
                 {
                     "source": SCRIPT_JSON_REL,
-                    "paired_docx": DOCX_REL,
-                    "pdf_path": PDF_REL,
+                    "paired_docx": docx_rel,
+                    "pdf_path": pdf_rel,
                     "tool": "reportlab",
                     "tool_path": str(python_path),
                     "font_path": details.get("font_path"),
@@ -631,6 +655,13 @@ def _file_entry(label: str, root: Path, relative: str) -> dict[str, str]:
         "path": relative,
         "sha256": f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}",
     }
+
+
+def _relative_or_absolute(root: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
 
 
 def _script_character_count(script: dict[str, Any]) -> int:

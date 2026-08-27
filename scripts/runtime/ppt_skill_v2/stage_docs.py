@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .deliverable_naming import project_deliverable_relpaths
 from .state import read_state
 
 
@@ -74,10 +75,7 @@ def sync_stage_docs(run_dir: str | Path) -> None:
         root / "阶段4_演讲稿输出" / "讲稿生成说明.md",
         "# 讲稿生成说明\n\n锁定稿经用户确认后，由主控大模型生成演讲逐字稿、Word 和 PDF。\n",
     )
-    _write_if_missing(
-        root / "阶段4_演讲稿输出" / "演讲逐字稿.md",
-        "# 演讲逐字稿\n\n待主控大模型基于已确认锁定稿填写。\n",
-    )
+    _write_stage4_placeholder_if_ready(root, state)
 
 
 def _write_stage2_index(root: Path, state: dict) -> None:
@@ -113,6 +111,18 @@ def _write_stage3_index(root: Path, state: dict) -> None:
 - 下一步：{state.get('next_required_action', '等待主控大模型推进')}
 """
     (root / "阶段3_可编辑PPT" / "阶段3_确认说明.md").write_text(stage3_doc, encoding="utf-8")
+
+
+def _write_stage4_placeholder_if_ready(root: Path, state: dict) -> None:
+    if state.get("current_stage") != "stage4":
+        return
+    if state.get("status") not in {"ready_for_stage4_script"}:
+        return
+    relpath = project_deliverable_relpaths(root, state=state)["stage4_speaker_script"]
+    _write_if_missing(
+        root / relpath,
+        "# 逐字稿\n\n待主控大模型基于已确认锁定稿填写。\n",
+    )
 
 
 def _yes_no(value: object) -> str:

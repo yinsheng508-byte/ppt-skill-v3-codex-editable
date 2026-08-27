@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 from .dev_mode import require_dev_fixture_enabled
+from .deliverable_naming import project_deliverable_relpaths
 from .events import append_event
 from .json_io import read_json, write_json
 from .planning_assets import content_path, deck_style_path, layout_intent_path
@@ -92,7 +93,8 @@ def record_editable_deck(
     )
     native_style_probe_rel = _normalize_existing_path(root, native_style_probe, "native style probe", required=False)
 
-    deck_path = root / "阶段3_可编辑PPT" / "ppt" / "可编辑PPT.pptx"
+    deck_rel = project_deliverable_relpaths(root, state=state)["stage3_editable_deck"]
+    deck_path = root / deck_rel
     deck_path.parent.mkdir(parents=True, exist_ok=True)
     if source.resolve() != deck_path.resolve():
         shutil.copy2(source, deck_path)
@@ -104,7 +106,7 @@ def record_editable_deck(
         "provider": provider,
         "provider_evidence_id": provider_evidence_id,
         "tool_call_id": tool_call_id,
-        "deck_path": "阶段3_可编辑PPT/ppt/可编辑PPT.pptx",
+        "deck_path": deck_rel,
         "slides_count": slides_count,
         "pptx_sha256": pptx_sha256,
         "created_at": now_iso(),
@@ -140,7 +142,8 @@ def record_editable_deck(
 
     state["status"] = "stage3_editable_qa_required"
     state["required_actor"] = "main_controller"
-    state["user_artifacts"]["stage3_editable_deck"] = "阶段3_可编辑PPT/ppt/可编辑PPT.pptx"
+    state.setdefault("user_artifacts", {})["stage3_editable_deck"] = deck_rel
+    state.setdefault("expected_user_paths", {})["stage3_editable_deck"] = deck_rel
     state["runtime_artifacts"]["stage3_editable_deck_manifest"] = "_state/阶段3/manifests/editable_deck.json"
     state["quality"]["stage3"] = "editable_qa_required"
     state["next_required_action"] = "主控大模型读取 render/inspect/coordinate execution report，记录阶段3坐标 QA 后再交给用户确认"

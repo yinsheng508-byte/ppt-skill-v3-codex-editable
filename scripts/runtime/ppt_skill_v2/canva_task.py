@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .deliverable_naming import LEGACY_STAGE2_IMAGE_PDF_REL, existing_stage2_image_pdf_rel
 from .json_io import read_json, write_json
 from .state import read_state
 from .time_utils import now_iso
@@ -14,7 +15,7 @@ CANVA_TASKS_REL = Path("_state") / "工具任务" / "canva"
 STAGE1_CONTENT_REL = Path("_state") / "阶段1" / "content.json"
 STAGE1_TRANSCRIPT_REL = Path("阶段1_规划确认") / "每页干净逐字稿.md"
 STAGE1_PLAN_REL = Path("阶段1_规划确认") / "页面规划.md"
-STAGE2_PDF_REL = Path("阶段2_图片版PPT") / "pdf" / "图片版PPT.pdf"
+STAGE2_PDF_REL = Path(LEGACY_STAGE2_IMAGE_PDF_REL)
 STAGE2_IMAGES_REL = Path("阶段2_图片版PPT") / "img"
 
 
@@ -29,7 +30,8 @@ def create_canva_task_brief(
     root = Path(run_dir)
     state_before = read_state(root)
     content_path = root / STAGE1_CONTENT_REL
-    stage2_pdf = root / STAGE2_PDF_REL
+    stage2_pdf_rel = existing_stage2_image_pdf_rel(root, state_before)
+    stage2_pdf = root / stage2_pdf_rel if stage2_pdf_rel else root / STAGE2_PDF_REL
 
     if not content_path.exists():
         raise ValidationError("stage1 content.json is required before creating a Canva task brief")
@@ -55,7 +57,7 @@ def create_canva_task_brief(
         "stage1_content": _posix(STAGE1_CONTENT_REL),
         "stage1_clean_transcript": _posix(STAGE1_TRANSCRIPT_REL),
         "stage1_page_plan": _posix(STAGE1_PLAN_REL),
-        "stage2_image_deck_pdf": _posix(STAGE2_PDF_REL),
+        "stage2_image_deck_pdf": stage2_pdf_rel or _posix(STAGE2_PDF_REL),
         "stage2_images_dir": _posix(STAGE2_IMAGES_REL),
     }
     task = {
@@ -87,7 +89,7 @@ def create_canva_task_brief(
         "project_name": state_before["project_name"],
         "source": _posix(STAGE1_CONTENT_REL),
         "visual_reference": {
-            "stage2_pdf": _posix(STAGE2_PDF_REL),
+            "stage2_pdf": stage2_pdf_rel or _posix(STAGE2_PDF_REL),
             "stage2_images_dir": _posix(STAGE2_IMAGES_REL),
         },
         "slides": slides,

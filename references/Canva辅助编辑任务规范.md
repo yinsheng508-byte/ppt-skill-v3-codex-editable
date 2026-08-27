@@ -26,7 +26,7 @@ Canva 辅助编辑任务可以读取阶段1和阶段2作为参考，但不能改
 - 不设置 `project_state.confirmed.stage3_editable_deck=true`。
 - 不写 `approve_stage3_coordinate_plan_start_text_fill`。
 - 不写 `approve_stage3_start_script_output`。
-- 不把 Canva 链接或 Canva 设计冒充 `阶段3_可编辑PPT/ppt/可编辑PPT.pptx`。
+- 不把 Canva 链接或 Canva 设计冒充 `阶段3_可编辑PPT/ppt/<封面第一页主题>｜可编辑PPT.pptx`。
 - 不因为 Canva 任务完成就自动进入阶段4。
 
 如用户后续明确要求“使用 Canva 最终稿进入阶段4”，必须另行确认，并按阶段4外部锁定稿规则处理。`/canva` 本身不默认产生阶段4锁定稿。
@@ -41,7 +41,7 @@ Canva 辅助编辑任务可以读取阶段1和阶段2作为参考，但不能改
 _state/project_state.json
 阶段1_规划确认/每页干净逐字稿.md
 _state/阶段1/content.json
-阶段2_图片版PPT/pdf/图片版PPT.pdf
+阶段2_图片版PPT/pdf/<封面第一页主题>｜图片版PPT.pdf
 阶段2_图片版PPT/img/
 ```
 
@@ -176,7 +176,7 @@ _state/阶段1/content.json
 视觉参考：
 
 ```text
-阶段2_图片版PPT/pdf/图片版PPT.pdf
+阶段2_图片版PPT/pdf/<封面第一页主题>｜图片版PPT.pdf
 阶段2_图片版PPT/img/slide_XXX.png
 ```
 

@@ -66,7 +66,7 @@ def create_stage1_draft(run_dir: str | Path, slide_count: int = 1) -> Path:
         "**页面角色**：待主控大模型填写\n"
         "**本页目的**：待主控大模型填写\n\n"
         "### 页面可见文字\n\n"
-        "待主控大模型按标题、要点、表格或流程排版填写。\n",
+        "待主控大模型按标题、要点、表格或流程排版填写。第 01 页封面主标题会作为阶段2/3/4交付文件名前缀。\n",
         encoding="utf-8",
     )
     (stage_dir / "页面规划.md").write_text(

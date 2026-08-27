@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .deliverable_naming import project_deliverable_relpaths
 from .json_io import read_json, write_json
 from .paths import project_state_path
 from .time_utils import now_iso
@@ -11,6 +12,7 @@ from .validation import validate_project_state
 
 def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]:
     run_dir_text = str(run_dir)
+    deliverables = project_deliverable_relpaths(run_dir, state={"project_name": project_name})
     return {
         "schema_version": "2.0",
         "project_name": project_name,
@@ -50,12 +52,12 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
             "stage1_style_prompt_plan": "阶段1_规划确认/风格与提示词方案.md",
             "stage2_cover_options": "阶段2_图片版PPT/封面风格候选/封面风格选择说明.md",
             "stage2_trial_first5": "阶段2_图片版PPT/前5页试样/",
-            "stage2_image_deck": "阶段2_图片版PPT/pdf/图片版PPT.pdf",
+            "stage2_image_deck": deliverables["stage2_image_deck"],
             "stage3_coordinate_preview": "阶段3_可编辑PPT/坐标复刻预览/坐标复刻预览.md",
-            "stage3_editable_deck": "阶段3_可编辑PPT/ppt/可编辑PPT.pptx",
-            "stage4_speaker_script": "阶段4_演讲稿输出/演讲逐字稿.md",
-            "stage4_speaker_script_docx": "阶段4_演讲稿输出/docx/演讲逐字稿.docx",
-            "stage4_speaker_script_pdf": "阶段4_演讲稿输出/pdf/演讲逐字稿.pdf",
+            "stage3_editable_deck": deliverables["stage3_editable_deck"],
+            "stage4_speaker_script": deliverables["stage4_speaker_script"],
+            "stage4_speaker_script_docx": deliverables["stage4_speaker_script_docx"],
+            "stage4_speaker_script_pdf": deliverables["stage4_speaker_script_pdf"],
         },
         "runtime_artifacts": {
             "materials_index": "_state/阶段0/materials_index.json",

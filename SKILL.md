@@ -75,6 +75,7 @@ outputs/projects/<中文项目名>/
 - 继续、恢复、长任务防漂移：读 [恢复与防漂移协议.md](references/恢复与防漂移协议.md)。
 - 项目目录和阶段目录：读 [项目目录规范.md](references/项目目录规范.md)。
 - 阶段流程：读 [阶段流程.md](references/阶段流程.md)。
+- 阶段2/3/4导出 PDF、PPTX、Word 或交付前：读 [交付文件命名规范.md](references/交付文件命名规范.md)。
 - 阶段切换和用户确认：读 [主控决策协议.md](references/主控决策协议.md)。
 - 阶段0含微信公众号链接、截图、PDF 或复制全文且需要完整提取、复刻、仿写或改造成 PPT：读 [阶段0微信公众号资料处理规范.md](references/阶段0微信公众号资料处理规范.md)。
 - 阶段1路线、页面角色、设计合同和干净逐字稿：按需读 [PPT路线分流规范.md](references/PPT路线分流规范.md)、[页面角色与版式语法规范.md](references/页面角色与版式语法规范.md)、[阶段1设计合同规范.md](references/阶段1设计合同规范.md)、[阶段1每页干净逐字稿规范.md](references/阶段1每页干净逐字稿规范.md)。

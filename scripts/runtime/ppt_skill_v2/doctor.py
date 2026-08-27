@@ -4,6 +4,11 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from .deliverable_naming import (
+    existing_stage2_image_pdf_rel,
+    existing_stage3_editable_deck_rel,
+    existing_stage4_output_rel,
+)
 from .json_io import read_json
 from .coordinate_stage3_qa import COORDINATE_QA_CHECK_KEYS, validate_coordinate_stage3_qa_review
 from .image_geometry import read_image_dimensions
@@ -79,8 +84,8 @@ def _check_stage1_stage2_consistency(root: Path, issues: list[str], warnings: li
     trial_summary = root / "阶段2_图片版PPT" / "前5页试样" / "前5页试样说明.md"
     if status == "waiting_user_trial_first5_confirmation" and not trial_summary.exists():
         issues.append("阶段2状态等待试样确认，但缺少 前5页试样说明.md")
-    if current_stage == "stage2" and status == "waiting_user_confirmation" and not (root / "阶段2_图片版PPT" / "pdf" / "图片版PPT.pdf").exists():
-        issues.append("阶段2状态等待图片版 PDF 确认，但缺少 阶段2_图片版PPT/pdf/图片版PPT.pdf")
+    if current_stage == "stage2" and status == "waiting_user_confirmation" and not existing_stage2_image_pdf_rel(root, state):
+        issues.append("阶段2状态等待图片版 PDF 确认，但缺少主题化命名的阶段2图片版 PDF")
 
     visual_qa = root / "_state" / "阶段2" / "visual_qa" / "stage2_aesthetic_review.json"
     if visual_qa.exists():
@@ -151,7 +156,8 @@ def _check_stage3_consistency(root: Path, issues: list[str], warnings: list[str]
     coordinate_plan = root / "_state" / "阶段3" / "editable_coordinate_plan.json"
     editable_manifest = root / "_state" / "阶段3" / "manifests" / "editable_deck.json"
     visual_qa = root / "_state" / "阶段3" / "render_review" / "stage3_visual_qa_review.json"
-    editable_pptx = root / "阶段3_可编辑PPT" / "ppt" / "可编辑PPT.pptx"
+    editable_pptx_rel = existing_stage3_editable_deck_rel(root, state)
+    editable_pptx = root / editable_pptx_rel if editable_pptx_rel else None
     _check_stage3_timestamps(root, coordinate_plan, editable_manifest, visual_qa, warnings)
     _check_stage3_canonical_geometry(root, coordinate_plan, issues, warnings)
 
@@ -198,7 +204,7 @@ def _check_stage3_consistency(root: Path, issues: list[str], warnings: list[str]
         if not state.get("confirmed", {}).get("stage3_coordinate_plan"):
             issues.append("阶段3尚未记录用户确认文字坐标复刻，不能进入 OfficeCLI 坐标填字或可编辑 PPT 确认")
 
-    if editable_pptx.exists() and not editable_manifest.exists():
+    if editable_pptx is not None and editable_pptx.exists() and not editable_manifest.exists():
         issues.append("阶段3存在可编辑 PPTX 但缺少 editable_deck.json manifest")
     if editable_manifest.exists():
         _check_editable_manifest(root, editable_manifest, issues)
@@ -432,32 +438,37 @@ def _check_stage4_consistency(root: Path, issues: list[str], warnings: list[str]
         return
 
     manifest_path = root / "_state" / "阶段4" / "speaker_script_manifest.json"
-    markdown = root / "阶段4_演讲稿输出" / "演讲逐字稿.md"
-    docx = root / "阶段4_演讲稿输出" / "docx" / "演讲逐字稿.docx"
-    pdf = root / "阶段4_演讲稿输出" / "pdf" / "演讲逐字稿.pdf"
+    manifest = None
+    if manifest_path.exists():
+        try:
+            manifest = read_json(manifest_path)
+        except Exception:
+            manifest = None
+    markdown_rel = existing_stage4_output_rel(root, "stage4_speaker_script", state=state, manifest=manifest)
+    docx_rel = existing_stage4_output_rel(root, "stage4_speaker_script_docx", state=state, manifest=manifest)
+    pdf_rel = existing_stage4_output_rel(root, "stage4_speaker_script_pdf", state=state, manifest=manifest)
+    markdown = root / markdown_rel if markdown_rel else None
+    docx = root / docx_rel if docx_rel else None
+    pdf = root / pdf_rel if pdf_rel else None
     note = root / "阶段4_演讲稿输出" / "讲稿生成说明.md"
 
     status = state.get("status")
     _check_stage4_locked_source(root, state, issues)
     if status in {"stage4_script_generated", "completed"}:
-        for path, label in [(markdown, "演讲逐字稿.md"), (docx, "演讲逐字稿.docx"), (pdf, "演讲逐字稿.pdf"), (note, "讲稿生成说明.md")]:
-            if not path.exists():
+        for path, label in [(markdown, "逐字稿 Markdown"), (docx, "逐字稿 Word"), (pdf, "逐字稿 PDF"), (note, "讲稿生成说明.md")]:
+            if path is None or not path.exists():
                 issues.append(f"阶段4缺少{label}")
         if not manifest_path.exists():
             issues.append("阶段4缺少 speaker_script_manifest.json")
             return
         try:
-            manifest = validate_speaker_script_manifest(read_json(manifest_path))
+            manifest = validate_speaker_script_manifest(manifest or read_json(manifest_path))
         except Exception as exc:
             issues.append(f"speaker_script_manifest.json 无法通过校验：{exc}")
             return
         known = {file_info.get("path") for file_info in manifest.get("files", []) if isinstance(file_info, dict)}
-        for expected in {
-            "阶段4_演讲稿输出/演讲逐字稿.md",
-            "阶段4_演讲稿输出/docx/演讲逐字稿.docx",
-            "阶段4_演讲稿输出/pdf/演讲逐字稿.pdf",
-        }:
-            if expected not in known:
+        for expected in {markdown_rel, docx_rel, pdf_rel}:
+            if expected and expected not in known:
                 issues.append(f"speaker_script_manifest.json 缺少文件记录：{expected}")
         if manifest.get("summary", {}).get("pdf_text_probe") == "no_selectable_text_detected":
             issues.append("阶段4 PDF 未检测到可选择文本")
