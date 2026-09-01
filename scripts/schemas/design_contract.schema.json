@@ -15,6 +15,44 @@
   ],
   "properties": {
     "schema_version": { "const": "1.0" },
+    "education_context": {
+      "type": "object",
+      "properties": {
+        "is_k12": { "type": "boolean" },
+        "confidence": {
+          "type": "string",
+          "enum": ["explicit_user_request", "inferred_high", "inferred_medium", "unknown"]
+        },
+        "school_stage": {
+          "type": "string",
+          "enum": ["primary", "junior_high", "senior_high", "unknown"]
+        },
+        "grade": { "type": "string" },
+        "subject": { "type": "string" },
+        "subject_group": {
+          "type": "string",
+          "enum": ["language", "math", "foreign_language", "science", "humanities", "arts", "integrated", "unknown"]
+        },
+        "textbook_version": { "type": "string" },
+        "unit": { "type": "string" },
+        "lesson_title": { "type": "string" },
+        "lesson_number": { "type": "string" },
+        "class_type": { "type": "string" },
+        "lesson_scope": {
+          "type": "string",
+          "enum": ["single_lesson", "unit_review", "thematic_project", "unknown"]
+        },
+        "period_count": { "type": "integer", "minimum": 1 },
+        "minutes_per_period": { "type": "integer", "minimum": 1 },
+        "period_strategy": {
+          "type": "string",
+          "enum": ["explicit", "inferred_from_stage1", "inferred_from_textbook", "single_period_default", "needs_confirmation"]
+        },
+        "curriculum_standard": { "type": "string" },
+        "textbook_material_ids": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
     "route_family": {
       "type": "string",
       "enum": [

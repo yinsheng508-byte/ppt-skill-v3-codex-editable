@@ -22,6 +22,18 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
         "required_actor": "main_controller",
         "last_decision_id": None,
         "stage4_locked_presentation_source": None,
+        "stage4_outputs": {
+            "speaker_script": {
+                "required": True,
+                "status": "not_started",
+            },
+            "lesson_plan": {
+                "required": False,
+                "required_reason": None,
+                "status": "not_started",
+                "skip_reason": None,
+            },
+        },
         "confirmed": {
             "stage1_plan": False,
             "stage2_cover_style": False,
@@ -30,6 +42,7 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
             "stage3_coordinate_plan": False,
             "stage3_editable_deck": False,
             "stage4_speaker_script": False,
+            "stage4_lesson_plan": False,
         },
         "user_artifacts": {
             "stage1_page_plan": None,
@@ -45,6 +58,9 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
             "stage4_speaker_script": None,
             "stage4_speaker_script_docx": None,
             "stage4_speaker_script_pdf": None,
+            "stage4_lesson_plan": None,
+            "stage4_lesson_plan_docx": None,
+            "stage4_lesson_plan_pdf": None,
         },
         "expected_user_paths": {
             "stage1_page_plan": "阶段1_规划确认/页面规划.md",
@@ -58,6 +74,9 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
             "stage4_speaker_script": deliverables["stage4_speaker_script"],
             "stage4_speaker_script_docx": deliverables["stage4_speaker_script_docx"],
             "stage4_speaker_script_pdf": deliverables["stage4_speaker_script_pdf"],
+            "stage4_lesson_plan": deliverables["stage4_lesson_plan"],
+            "stage4_lesson_plan_docx": deliverables["stage4_lesson_plan_docx"],
+            "stage4_lesson_plan_pdf": deliverables["stage4_lesson_plan_pdf"],
         },
         "runtime_artifacts": {
             "materials_index": "_state/阶段0/materials_index.json",
@@ -89,9 +108,15 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
             "stage3_editable_deck_manifest": "_state/阶段3/manifests/editable_deck.json",
             "stage3_ai_quality_profile": "_state/阶段3/ai_quality/stage3_quality_profile.json",
             "stage3_controller_review_plan_draft": "_state/阶段3/ai_quality/controller_review_plan.draft.json",
+            "stage4_education_context": "_state/阶段4/education_context.json",
+            "stage4_textbook_context": "_state/阶段4/textbook_context.json",
+            "stage4_lesson_plan_context": "_state/阶段4/lesson_plan_context.json",
             "stage4_speaker_script_json": "_state/阶段4/speaker_script.json",
             "stage4_speaker_script_manifest": "_state/阶段4/speaker_script_manifest.json",
             "stage4_speaker_script_qa": "_state/阶段4/speaker_script_qa.json",
+            "stage4_lesson_plan_json": "_state/阶段4/lesson_plan.json",
+            "stage4_lesson_plan_manifest": "_state/阶段4/lesson_plan_manifest.json",
+            "stage4_lesson_plan_qa": "_state/阶段4/lesson_plan_qa.json",
         },
         "control_artifacts": {
             "resume_brief": "_state/control/resume_brief.json",
@@ -110,6 +135,32 @@ def make_initial_state(project_name: str, run_dir: str | Path) -> dict[str, Any]
         "next_required_action": "整理资料并由主控大模型撰写阶段1规划",
         "updated_at": now_iso(),
     }
+
+
+def stage4_lesson_plan_required(state: dict[str, Any]) -> bool:
+    outputs = state.get("stage4_outputs")
+    if isinstance(outputs, dict):
+        lesson_plan = outputs.get("lesson_plan")
+        if isinstance(lesson_plan, dict) and isinstance(lesson_plan.get("required"), bool):
+            return lesson_plan["required"]
+    return bool(state.get("stage4_lesson_plan_required"))
+
+
+def set_stage4_lesson_plan_required(
+    state: dict[str, Any],
+    *,
+    required: bool,
+    reason: str | None = None,
+    skip_reason: str | None = None,
+) -> dict[str, Any]:
+    outputs = state.setdefault("stage4_outputs", {})
+    lesson_plan = outputs.setdefault("lesson_plan", {})
+    lesson_plan["required"] = bool(required)
+    lesson_plan["required_reason"] = reason if required else None
+    lesson_plan["skip_reason"] = None if required else skip_reason
+    lesson_plan.setdefault("status", "not_started")
+    state["stage4_lesson_plan_required"] = bool(required)
+    return state
 
 
 def read_state(run_dir: str | Path) -> dict[str, Any]:

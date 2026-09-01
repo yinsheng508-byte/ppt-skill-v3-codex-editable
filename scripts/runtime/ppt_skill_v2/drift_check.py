@@ -8,7 +8,7 @@ from .doctor import check_project
 from .json_io import read_json, write_json
 from .paths import control_dir, project_state_path
 from .stage3_artifact_hashes import stage3_artifacts_stale
-from .state import read_state
+from .state import read_state, stage4_lesson_plan_required
 from .time_utils import now_iso
 
 
@@ -19,6 +19,7 @@ BROAD_ACTION_RULES: dict[str, dict[str, Any]] = {
     "stage2_image": {"stages": {"stage2"}, "actor": "main_controller", "requires_confirmed": "stage1_plan"},
     "stage3_editable": {"stages": {"stage3"}, "actor": "main_controller", "requires_confirmed": "stage2_image_deck"},
     "stage4_script": {"stages": {"stage4"}, "actor": "main_controller", "requires_locked_source": True},
+    "stage4_lesson_plan": {"stages": {"stage4"}, "actor": "main_controller", "requires_locked_source": True, "requires_k12_lesson_plan": True},
     "canva_auxiliary": {"actor": "main_controller", "sidecar": True},
 }
 STAGE3_ACTIONS = {
@@ -59,7 +60,19 @@ ACTION_RULES: dict[str, dict[str, Any]] = {
         "actor": "main_controller",
     },
     "record_coordinate_stage3_qa": {"stage": "stage3", "statuses": {"stage3_editable_qa_required", "stage3_officecli_deck_built"}, "actor": "main_controller"},
-    "build_speaker_script": {"stage": "stage4", "statuses": {"ready_for_stage4_script", "stage4_script_generated"}, "actor": "main_controller"},
+    "build_speaker_script": {"stage": "stage4", "statuses": {"ready_for_stage4_script", "stage4_script_generated", "stage4_lesson_plan_generated"}, "actor": "main_controller"},
+    "build_lesson_plan": {
+        "stage": "stage4",
+        "statuses": {"ready_for_stage4_script", "stage4_script_generated", "stage4_lesson_plan_generated"},
+        "actor": "main_controller",
+        "requires_k12_lesson_plan": True,
+    },
+    "record_lesson_plan_qa": {
+        "stage": "stage4",
+        "statuses": {"stage4_lesson_plan_generated", "stage4_script_generated"},
+        "actor": "main_controller",
+        "requires_k12_lesson_plan": True,
+    },
 }
 CONFIRMATION_REQUIREMENTS: dict[str, tuple[str, str]] = {
     "dispatch_cover_options": ("stage1_plan", "阶段1规划尚未确认，不能分发阶段2封面候选"),
@@ -75,6 +88,7 @@ CONFIRMATION_REQUIREMENTS: dict[str, tuple[str, str]] = {
     "build_editable_brief": ("stage3_coordinate_plan", "阶段3文字坐标复刻尚未确认，不能构建可编辑 PPT handoff"),
     "build_officecli_coordinate_deck": ("stage3_coordinate_plan", "阶段3文字坐标复刻尚未确认，不能运行 OfficeCLI 坐标填字"),
     "build_speaker_script": ("stage2_image_deck", "尚未确认任何锁定稿，不能生成阶段4讲稿"),
+    "build_lesson_plan": ("stage2_image_deck", "尚未确认任何锁定稿，不能生成阶段4教案"),
 }
 
 
@@ -126,16 +140,19 @@ def _check_action(root: Path, state: dict[str, Any], action: str, issues: list[s
         expected_actor = rule.get("actor")
         if expected_actor and state.get("required_actor") != expected_actor:
             issues.append(f"{action} 需要 required_actor={expected_actor}，当前 required_actor={state.get('required_actor')}")
+        if rule.get("requires_k12_lesson_plan") and not stage4_lesson_plan_required(state):
+            issues.append(f"{action} 仅适用于 K12 教案必选项目，当前 stage4_outputs.lesson_plan.required 不是 true")
     requirement = CONFIRMATION_REQUIREMENTS.get(action)
     if requirement:
         key, message = requirement
         confirmed = state.get("confirmed") if isinstance(state.get("confirmed"), dict) else {}
         if not confirmed.get(key):
-            if action == "build_speaker_script" and state.get("stage4_locked_presentation_source"):
+            if action in {"build_speaker_script", "build_lesson_plan"} and state.get("stage4_locked_presentation_source"):
                 return
             issues.append(message)
-    if action == "build_speaker_script" and not state.get("stage4_locked_presentation_source"):
-        issues.append("阶段4缺少 stage4_locked_presentation_source，不能生成讲稿")
+    if action in {"build_speaker_script", "build_lesson_plan"} and not state.get("stage4_locked_presentation_source"):
+        target = "讲稿" if action == "build_speaker_script" else "教案"
+        issues.append(f"阶段4缺少 stage4_locked_presentation_source，不能生成{target}")
     if action in {"record_decision", "execute_decision"} and state.get("required_actor") == "user":
         warnings.append("当前等待用户确认；record/execute decision 前必须确认 decision.user_confirmed 与用户真实反馈一致")
 
@@ -162,7 +179,9 @@ def _check_broad_action(
     if isinstance(required_confirmation, str) and not confirmed.get(required_confirmation):
         issues.append(f"{action} 缺少确认：{required_confirmation}")
     if rule.get("requires_locked_source") and not state.get("stage4_locked_presentation_source"):
-        issues.append("阶段4缺少 stage4_locked_presentation_source，不能生成讲稿")
+        issues.append("阶段4缺少 stage4_locked_presentation_source，不能生成阶段4产物")
+    if rule.get("requires_k12_lesson_plan") and not stage4_lesson_plan_required(state):
+        issues.append(f"{action} 仅适用于 K12 教案必选项目，当前 stage4_outputs.lesson_plan.required 不是 true")
     if action == "canva_auxiliary":
         if not confirmed.get("stage1_plan"):
             warnings.append("Canva 辅助任务缺少已确认阶段1文案时，只能做有限错别字检查")

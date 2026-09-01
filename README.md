@@ -1,8 +1,8 @@
 # PPT Skill v2（Codex 可编辑架构迭代）
 
-这是一个中文 AI PPT Skill 主包，覆盖 PPT 生成、改造、审查、可编辑化和演讲稿输出流程。
+这是一个中文 AI PPT Skill 主包，覆盖 PPT 生成、改造、审查、可编辑化、演讲稿输出和 K12 教案设计流程。
 
-当前发布版本：`0.2.0`，更新记录见 `CHANGELOG.md`。
+当前发布版本：`0.3.0`，更新记录见 `CHANGELOG.md`。
 
 ## 版本口径
 
@@ -17,7 +17,7 @@
 - `AGENTS.md`：本仓库维护约定。
 - `CHANGELOG.md`：仓库发布版本和变更记录。
 - `references/`：阶段流程、质量标准、生图证据链和可编辑 PPT 路线等规范。
-- `assets/`：模板和风格模板。
+- `assets/`：模板、风格模板和 K12 学科写作 profile。
 - `scripts/`：确定性运行脚本、schema 和辅助工具。
 - `agents/`：可复用 agent 配置。
 - `inputs/`、`outputs/`、`tmp/`：仅保留空目录占位；本地项目输入、输出和临时文件不会上传。
@@ -35,6 +35,7 @@ cd /path/to/ppt-skill-v3-codex-editable
 git pull --ff-only
 python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
 python3 scripts/pptctl.py validate-style-templates
+python3 scripts/pptctl.py validate-k12-subject-profiles
 ```
 
 首次从 GitHub 安装可使用：
@@ -47,12 +48,16 @@ git clone https://github.com/yinsheng508-byte/ppt-skill-v3-codex-editable.git
 
 ```bash
 git status --short
+git switch -c codex/<release-branch>
 python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
 python3 scripts/pptctl.py validate-style-templates
+python3 scripts/pptctl.py validate-k12-subject-profiles
 PYTHONPATH=scripts/runtime python3 -m unittest discover -s tests
 git add SKILL.md AGENTS.md README.md CHANGELOG.md agents references assets scripts
-git commit -m "Release ppt-skill-v2 0.2.0"
-git push origin main
+git commit -m "Release ppt-skill-v2 0.3.0"
+git push -u origin codex/<release-branch>
+gh pr create --base main --head codex/<release-branch>
+gh pr merge --merge --delete-branch
 ```
 
 ## 校验
@@ -62,6 +67,7 @@ git push origin main
 ```bash
 python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
 python3 scripts/pptctl.py validate-style-templates
+python3 scripts/pptctl.py validate-k12-subject-profiles
 ```
 
 维护者本地如果保留 `tests/` 开发目录，可额外运行：

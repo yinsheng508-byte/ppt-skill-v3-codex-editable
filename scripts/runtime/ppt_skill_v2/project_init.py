@@ -33,6 +33,9 @@ def create_project(project_name: str, output_root: str | Path) -> Path:
     (run_dir / "阶段3_可编辑PPT" / "ppt").mkdir(parents=True, exist_ok=True)
     (run_dir / "阶段4_演讲稿输出" / "docx").mkdir(parents=True, exist_ok=True)
     (run_dir / "阶段4_演讲稿输出" / "pdf").mkdir(parents=True, exist_ok=True)
+    (run_dir / "阶段4_演讲稿输出" / "教案设计").mkdir(parents=True, exist_ok=True)
+    (run_dir / "阶段4_演讲稿输出" / "教案设计" / "docx").mkdir(parents=True, exist_ok=True)
+    (run_dir / "阶段4_演讲稿输出" / "教案设计" / "pdf").mkdir(parents=True, exist_ok=True)
 
     state_root = state_dir(run_dir)
     for dirname in [

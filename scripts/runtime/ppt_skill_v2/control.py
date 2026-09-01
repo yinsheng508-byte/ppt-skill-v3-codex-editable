@@ -3,12 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .deliverable_naming import existing_stage4_lesson_plan_output_rel, existing_stage4_output_rel
 from .doctor import check_project
 from .events import read_events
 from .json_io import read_json, write_json
 from .paths import control_dir, decision_path, decisions_dir
-from .state import read_state
+from .state import read_state, stage4_lesson_plan_required
 from .time_utils import now_iso
+from .validation import validate_lesson_plan_manifest, validate_lesson_plan_qa, validate_speaker_script_manifest
 
 
 def build_next_action(run_dir: str | Path, *, persist: bool = True) -> dict[str, Any]:
@@ -25,7 +27,7 @@ def build_next_action(run_dir: str | Path, *, persist: bool = True) -> dict[str,
         "summary": state.get("next_required_action") or "",
         "source": "project_state.next_required_action",
         "confirmation_required": state.get("required_actor") == "user",
-        "candidate_decision_types": _candidate_decision_types(state),
+        "candidate_decision_types": _candidate_decision_types(root, state),
         "suggested_command_groups": _suggested_command_groups(state),
         "created_at": now_iso(),
     }
@@ -151,7 +153,7 @@ def _action_kind(state: dict[str, Any]) -> str:
     return "inspect"
 
 
-def _candidate_decision_types(state: dict[str, Any]) -> list[str]:
+def _candidate_decision_types(root: Path, state: dict[str, Any]) -> list[str]:
     stage = state.get("current_stage")
     status = state.get("status")
     if stage == "stage1" and status == "waiting_user_confirmation":
@@ -166,7 +168,7 @@ def _candidate_decision_types(state: dict[str, Any]) -> list[str]:
         return ["approve_stage3_coordinate_plan_start_text_fill", "request_stage3_coordinate_plan_revision"]
     if stage == "stage3" and status == "waiting_user_confirmation":
         return ["approve_stage3_start_script_output", "request_stage3_revision"]
-    if stage == "stage4" and status == "stage4_script_generated":
+    if stage == "stage4" and status in {"stage4_script_generated", "stage4_lesson_plan_generated"} and _stage4_required_outputs_generated(root, state):
         return ["stage4_script_completed"]
     if stage == "stage4" and status == "completed":
         return ["reopen_stage3_sample_after_stage4"]
@@ -204,8 +206,68 @@ def _suggested_command_groups(state: dict[str, Any]) -> list[str]:
             "build-coordinate-preview",
         ]
     if stage == "stage4":
-        return ["build-speaker-script", "record-decision", "execute-decision"]
+        commands = ["build-speaker-script"]
+        if stage4_lesson_plan_required(state):
+            commands.append("build-lesson-plan")
+        commands.extend(["record-decision", "execute-decision"])
+        return commands
     return []
+
+
+def _stage4_required_outputs_generated(root: Path, state: dict[str, Any]) -> bool:
+    if not _stage4_speaker_outputs_ready(root, state):
+        return False
+    if not stage4_lesson_plan_required(state):
+        return True
+    return _stage4_lesson_plan_outputs_ready(root, state)
+
+
+def _stage4_speaker_outputs_ready(root: Path, state: dict[str, Any]) -> bool:
+    manifest_path = root / "_state" / "阶段4" / "speaker_script_manifest.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = validate_speaker_script_manifest(read_json(manifest_path))
+    except Exception:
+        return False
+    if manifest.get("status") != "generated":
+        return False
+    return all(
+        _existing_relpath_exists(root, existing_stage4_output_rel(root, key, state=state, manifest=manifest))
+        for key in ("stage4_speaker_script", "stage4_speaker_script_docx", "stage4_speaker_script_pdf")
+    )
+
+
+def _stage4_lesson_plan_outputs_ready(root: Path, state: dict[str, Any]) -> bool:
+    manifest_path = root / "_state" / "阶段4" / "lesson_plan_manifest.json"
+    qa_path = root / "_state" / "阶段4" / "lesson_plan_qa.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = validate_lesson_plan_manifest(read_json(manifest_path))
+    except Exception:
+        return False
+    if manifest.get("status") != "generated":
+        return False
+    if manifest.get("summary", {}).get("pdf_text_probe") == "no_selectable_text_detected":
+        return False
+    if not all(
+        _existing_relpath_exists(root, existing_stage4_lesson_plan_output_rel(root, key, state=state, manifest=manifest))
+        for key in ("stage4_lesson_plan", "stage4_lesson_plan_docx", "stage4_lesson_plan_pdf")
+    ):
+        return False
+    if qa_path.exists():
+        try:
+            qa = validate_lesson_plan_qa(read_json(qa_path))
+        except Exception:
+            return False
+        if qa.get("status") == "fail" or qa.get("blockers"):
+            return False
+    return True
+
+
+def _existing_relpath_exists(root: Path, relpath: str | None) -> bool:
+    return bool(relpath and (root / relpath).exists())
 
 
 def _last_decision_summary(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:

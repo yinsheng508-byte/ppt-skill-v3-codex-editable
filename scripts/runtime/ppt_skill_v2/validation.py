@@ -50,6 +50,30 @@ DESIGN_CONTRACT_COMMUNICATION_PATHS = {
     "original_slide_upgrade_path",
 }
 DESIGN_CONTRACT_SOURCE_MODES = {"new_deck", "source_rewrite", "visual_remake"}
+EDUCATION_CONTEXT_CONFIDENCES = {"explicit_user_request", "inferred_high", "inferred_medium", "unknown"}
+EDUCATION_CONTEXT_SCHOOL_STAGES = {"primary", "junior_high", "senior_high", "unknown"}
+EDUCATION_CONTEXT_SUBJECT_GROUPS = {
+    "language",
+    "math",
+    "foreign_language",
+    "science",
+    "humanities",
+    "arts",
+    "integrated",
+    "unknown",
+}
+EDUCATION_CONTEXT_LESSON_SCOPES = {"single_lesson", "unit_review", "thematic_project", "unknown"}
+EDUCATION_CONTEXT_PERIOD_STRATEGIES = {
+    "explicit",
+    "inferred_from_stage1",
+    "inferred_from_textbook",
+    "single_period_default",
+    "needs_confirmation",
+}
+LESSON_PLAN_REFLECTION_MODES = {"pre_teaching_prompt", "post_teaching_record"}
+LESSON_PLAN_MANIFEST_STATUSES = {"generated", "needs_review", "failed"}
+LESSON_PLAN_QA_STATUSES = {"pass", "pass_with_warnings", "needs_controller_review", "needs_teacher_confirmation", "fail"}
+LESSON_PLAN_QA_PASS_STATUSES = {"pass", "pass_with_warnings"}
 COVER_OPTION_IDS = {"A", "B", "C", "D"}
 STAGE2_QA_SCOPES = {"cover_options", "trial_first5", "full_image_deck"}
 STAGE2_QA_STATUSES = {"pass", "needs_rework"}
@@ -166,6 +190,9 @@ def _reject_forbidden_fields(value: Any, label: str = "$") -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             normalized = str(key).lower()
+            if normalized == "confidence" and label.endswith("education_context"):
+                _reject_forbidden_fields(child, f"{label}.{key}")
+                continue
             if normalized in FORBIDDEN_FIELD_FRAGMENTS or any(fragment in normalized for fragment in FORBIDDEN_FIELD_FRAGMENTS):
                 raise ValidationError(f"{label}.{key}: OCR-derived field is forbidden")
             _reject_forbidden_fields(child, f"{label}.{key}")
@@ -411,6 +438,8 @@ def validate_content_asset(data: Any) -> dict[str, Any]:
         raise ValidationError("content.schema_version must be 2.3")
     for field in ("deck_title", "audience", "route"):
         _require_string(content, field, "content")
+    if "education_context" in content:
+        validate_education_context(content["education_context"], "content.education_context")
     slides = _require_non_empty_list(content, "slides", "content")
     _validate_slide_indices(slides, "content.slides")
     for index, slide in enumerate(slides, start=1):
@@ -507,6 +536,52 @@ def _validate_text_contract(value: Any, label: str) -> dict[str, Any]:
     return value
 
 
+def validate_education_context(data: Any, label: str = "education_context") -> dict[str, Any]:
+    context = _require_mapping(data, label)
+    if "is_k12" in context:
+        _require_bool(context, "is_k12", label)
+    if "confidence" in context:
+        _require_string(context, "confidence", label)
+        if context["confidence"] not in EDUCATION_CONTEXT_CONFIDENCES:
+            raise ValidationError(f"{label}.confidence is invalid")
+    if "school_stage" in context:
+        _require_string(context, "school_stage", label)
+        if context["school_stage"] not in EDUCATION_CONTEXT_SCHOOL_STAGES:
+            raise ValidationError(f"{label}.school_stage is invalid")
+    if "subject_group" in context:
+        _require_string(context, "subject_group", label)
+        if context["subject_group"] not in EDUCATION_CONTEXT_SUBJECT_GROUPS:
+            raise ValidationError(f"{label}.subject_group is invalid")
+    if "lesson_scope" in context:
+        _require_string(context, "lesson_scope", label)
+        if context["lesson_scope"] not in EDUCATION_CONTEXT_LESSON_SCOPES:
+            raise ValidationError(f"{label}.lesson_scope is invalid")
+    if "period_strategy" in context:
+        _require_string(context, "period_strategy", label)
+        if context["period_strategy"] not in EDUCATION_CONTEXT_PERIOD_STRATEGIES:
+            raise ValidationError(f"{label}.period_strategy is invalid")
+    for field in (
+        "grade",
+        "subject",
+        "textbook_version",
+        "unit",
+        "lesson_title",
+        "lesson_number",
+        "class_type",
+        "curriculum_standard",
+    ):
+        if field in context:
+            _require_string(context, field, label)
+    for field in ("period_count", "minutes_per_period"):
+        if field in context:
+            value = context[field]
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValidationError(f"{label}.{field} must be a positive integer")
+    if "textbook_material_ids" in context:
+        _require_string_list(context, "textbook_material_ids", label)
+    return context
+
+
 def validate_design_contract(data: Any) -> dict[str, Any]:
     contract = _require_mapping(data, "design_contract")
     _reject_forbidden_fields(contract)
@@ -580,6 +655,8 @@ def validate_design_contract(data: Any) -> dict[str, Any]:
         if "style_positioning" in option:
             _require_string(option, "style_positioning", label)
     _require_string_list(contract, "stage2_qa_focus", "design_contract", non_empty=True)
+    if "education_context" in contract:
+        validate_education_context(contract["education_context"], "design_contract.education_context")
     return contract
 
 
@@ -1070,3 +1147,250 @@ def validate_speaker_script_manifest(data: Any) -> dict[str, Any]:
     if "estimated_minutes" in summary and _require_number(summary, "estimated_minutes", "speaker_script_manifest.summary") <= 0:
         raise ValidationError("speaker_script_manifest.summary.estimated_minutes must be positive")
     return manifest
+
+
+def validate_lesson_plan(data: Any) -> dict[str, Any]:
+    lesson_plan = _require_mapping(data, "lesson_plan")
+    _reject_forbidden_fields(lesson_plan)
+    _require_fields(
+        lesson_plan,
+        ["schema_version", "project_name", "run_dir", "created_at", "basis", "education_context", "overview", "periods"],
+        "lesson_plan",
+    )
+    if lesson_plan["schema_version"] != "1.0":
+        raise ValidationError("lesson_plan.schema_version must be 1.0")
+    for field in ("project_name", "run_dir", "created_at"):
+        _require_string(lesson_plan, field, "lesson_plan")
+    _validate_lesson_plan_basis(lesson_plan["basis"])
+    validate_education_context(lesson_plan["education_context"], "lesson_plan.education_context")
+    _validate_lesson_plan_overview(lesson_plan["overview"])
+    periods = _require_non_empty_list(lesson_plan, "periods", "lesson_plan")
+    seen_periods: set[int] = set()
+    for index, period in enumerate(periods, start=1):
+        _validate_lesson_plan_period(period, f"lesson_plan.periods[{index}]", seen_periods)
+    if "subject_extension" in lesson_plan and not isinstance(lesson_plan["subject_extension"], dict):
+        raise ValidationError("lesson_plan.subject_extension must be an object")
+    if "appendices" in lesson_plan and not isinstance(lesson_plan["appendices"], dict):
+        raise ValidationError("lesson_plan.appendices must be an object")
+    return lesson_plan
+
+
+def _validate_lesson_plan_basis(value: Any) -> dict[str, Any]:
+    basis = _require_mapping(value, "lesson_plan.basis")
+    _require_fields(basis, ["stage1_page_plan", "stage1_content", "locked_presentation_source"], "lesson_plan.basis")
+    for field in ("stage1_page_plan", "stage1_content"):
+        _require_string(basis, field, "lesson_plan.basis")
+    if "stage1_clean_transcript" in basis:
+        _require_string(basis, "stage1_clean_transcript", "lesson_plan.basis")
+    if "lesson_plan_context" in basis:
+        _require_string(basis, "lesson_plan_context", "lesson_plan.basis")
+    _validate_locked_presentation_source(basis["locked_presentation_source"], "lesson_plan.basis.locked_presentation_source")
+    for field in ("textbook_materials", "curriculum_sources", "source_conflicts"):
+        if field in basis and not isinstance(basis[field], list):
+            raise ValidationError(f"lesson_plan.basis.{field} must be a list")
+    return basis
+
+
+def _validate_lesson_plan_overview(value: Any) -> dict[str, Any]:
+    overview = _require_mapping(value, "lesson_plan.overview")
+    _require_fields(
+        overview,
+        [
+            "textbook_analysis",
+            "learner_analysis",
+            "core_competency_goals",
+            "key_points",
+            "difficult_points",
+            "breakthrough_strategy",
+            "teaching_methods",
+            "preparation",
+        ],
+        "lesson_plan.overview",
+    )
+    for field in ("textbook_analysis", "learner_analysis", "breakthrough_strategy", "teaching_methods"):
+        if field in overview:
+            _require_string_list(overview, field, "lesson_plan.overview")
+    for field in ("core_competency_goals", "key_points", "difficult_points"):
+        _require_string_list(overview, field, "lesson_plan.overview", non_empty=True)
+    preparation = _require_mapping(overview["preparation"], "lesson_plan.overview.preparation")
+    for field in ("teacher", "student", "resources", "equipment", "safety_notes"):
+        if field in preparation:
+            _require_string_list(preparation, field, "lesson_plan.overview.preparation")
+    return overview
+
+
+def _validate_lesson_plan_period(period: Any, label: str, seen_periods: set[int]) -> dict[str, Any]:
+    item = _require_mapping(period, label)
+    _require_fields(item, ["period_no", "period_title", "duration_minutes", "period_objectives", "process", "homework", "reflection"], label)
+    _require_positive_integer(item, "period_no", label)
+    if item["period_no"] in seen_periods:
+        raise ValidationError(f"{label}.period_no is duplicated: {item['period_no']}")
+    seen_periods.add(item["period_no"])
+    _require_string(item, "period_title", label)
+    _require_positive_integer(item, "duration_minutes", label)
+    if "slide_range" in item:
+        _require_string(item, "slide_range", label)
+    if "material_scope" in item:
+        _require_string_list(item, "material_scope", label)
+    _require_string_list(item, "period_objectives", label, non_empty=True)
+    if "activity_overview" in item:
+        _require_string(item, "activity_overview", label)
+    process = _require_non_empty_list(item, "process", label)
+    for index, step in enumerate(process, start=1):
+        _validate_lesson_plan_process_step(step, f"{label}.process[{index}]")
+    _validate_lesson_plan_homework(item["homework"], f"{label}.homework")
+    if "blackboard_design" in item:
+        _require_string_list(item, "blackboard_design", label)
+    _validate_lesson_plan_reflection(item["reflection"], f"{label}.reflection")
+    return item
+
+
+def _validate_lesson_plan_process_step(step: Any, label: str) -> dict[str, Any]:
+    item = _require_mapping(step, label)
+    _require_fields(item, ["phase", "duration_minutes", "teacher_activity", "student_activity", "design_intent"], label)
+    _require_string(item, "phase", label)
+    _require_positive_integer(item, "duration_minutes", label)
+    _require_string_list(item, "teacher_activity", label, non_empty=True)
+    _require_string_list(item, "student_activity", label, non_empty=True)
+    _require_string(item, "design_intent", label)
+    if "ppt_slide_refs" in item:
+        refs = _require_non_empty_list(item, "ppt_slide_refs", label)
+        for position, ref in enumerate(refs, start=1):
+            if isinstance(ref, bool) or not isinstance(ref, int) or ref <= 0:
+                raise ValidationError(f"{label}.ppt_slide_refs[{position}] must be a positive integer")
+    if "materials_refs" in item:
+        _require_string_list(item, "materials_refs", label, non_empty=True)
+    if "ppt_slide_refs" not in item and "materials_refs" not in item:
+        raise ValidationError(f"{label} requires ppt_slide_refs or materials_refs")
+    for field in ("learning_task", "assessment_evidence", "safety_notes"):
+        if field in item:
+            _require_string_list(item, field, label)
+    if "secondary_preparation_note" in item:
+        _require_string(item, "secondary_preparation_note", label)
+    return item
+
+
+def _validate_lesson_plan_homework(value: Any, label: str) -> dict[str, Any]:
+    homework = _require_mapping(value, label)
+    has_task = False
+    for field in ("basic", "consolidation", "extension", "answer_key"):
+        if field in homework:
+            values = _require_string_list(homework, field, label)
+            if field != "answer_key" and values:
+                has_task = True
+    if not has_task:
+        raise ValidationError(f"{label} requires at least one homework task")
+    return homework
+
+
+def _validate_lesson_plan_reflection(value: Any, label: str) -> dict[str, Any]:
+    reflection = _require_mapping(value, label)
+    _require_fields(reflection, ["mode"], label)
+    _require_string(reflection, "mode", label)
+    if reflection["mode"] not in LESSON_PLAN_REFLECTION_MODES:
+        raise ValidationError(f"{label}.mode is invalid")
+    for field in ("success_observation_prompts", "risk_observation_prompts", "improvement_prompts"):
+        if field in reflection:
+            _require_string_list(reflection, field, label)
+    return reflection
+
+
+def _require_positive_integer(data: dict[str, Any], field: str, label: str) -> int:
+    value = data.get(field)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValidationError(f"{label}.{field} must be a positive integer")
+    return value
+
+
+def validate_lesson_plan_manifest(data: Any) -> dict[str, Any]:
+    manifest = _require_mapping(data, "lesson_plan_manifest")
+    _require_fields(
+        manifest,
+        ["schema_version", "project_name", "run_dir", "files", "conversion", "summary", "created_at", "status"],
+        "lesson_plan_manifest",
+    )
+    if manifest["schema_version"] != "1.0":
+        raise ValidationError("lesson_plan_manifest.schema_version must be 1.0")
+    for field in ("project_name", "run_dir", "created_at", "status"):
+        _require_string(manifest, field, "lesson_plan_manifest")
+    if manifest["status"] not in LESSON_PLAN_MANIFEST_STATUSES:
+        raise ValidationError("lesson_plan_manifest.status is invalid")
+
+    files = _require_non_empty_list(manifest, "files", "lesson_plan_manifest")
+    if len(files) < 3:
+        raise ValidationError("lesson_plan_manifest.files must include Markdown, DOCX and PDF")
+    for index, file_info in enumerate(files, start=1):
+        label = f"lesson_plan_manifest.files[{index}]"
+        item = _require_mapping(file_info, label)
+        _require_fields(item, ["label", "path", "sha256"], label)
+        for field in ("label", "path"):
+            _require_string(item, field, label)
+        _require_sha256(item, "sha256", label)
+
+    conversion = _require_mapping(manifest["conversion"], "lesson_plan_manifest.conversion")
+    _require_fields(conversion, ["source", "pdf_path", "tool"], "lesson_plan_manifest.conversion")
+    for field in ("source", "pdf_path", "tool"):
+        _require_string(conversion, field, "lesson_plan_manifest.conversion")
+    if "paired_docx" in conversion:
+        _require_string(conversion, "paired_docx", "lesson_plan_manifest.conversion")
+
+    summary = _require_mapping(manifest["summary"], "lesson_plan_manifest.summary")
+    for field in ("periods", "activities"):
+        _require_positive_integer(summary, field, "lesson_plan_manifest.summary")
+    for field in ("subject_group", "word_table_mode"):
+        _require_string(summary, field, "lesson_plan_manifest.summary")
+    if "pdf_pages" in summary:
+        _require_positive_integer(summary, "pdf_pages", "lesson_plan_manifest.summary")
+    if "pdf_text_probe" in summary:
+        _require_string(summary, "pdf_text_probe", "lesson_plan_manifest.summary")
+    return manifest
+
+
+def validate_lesson_plan_qa(data: Any) -> dict[str, Any]:
+    qa = _require_mapping(data, "lesson_plan_qa")
+    _require_fields(
+        qa,
+        ["schema_version", "project_name", "run_dir", "status", "teacher_confirmation_items", "controller_reviewed", "created_at"],
+        "lesson_plan_qa",
+    )
+    if qa["schema_version"] != "1.0":
+        raise ValidationError("lesson_plan_qa.schema_version must be 1.0")
+    for field in ("project_name", "run_dir", "status", "created_at"):
+        _require_string(qa, field, "lesson_plan_qa")
+    if qa["status"] not in LESSON_PLAN_QA_STATUSES:
+        raise ValidationError("lesson_plan_qa.status is invalid")
+    for field in ("checks", "subject_checks"):
+        if field in qa and not isinstance(qa.get(field), dict):
+            raise ValidationError(f"lesson_plan_qa.{field} must be an object")
+    for field in ("blockers", "warnings", "review_notes"):
+        if field in qa:
+            _require_string_list(qa, field, "lesson_plan_qa")
+    _require_string_list(qa, "teacher_confirmation_items", "lesson_plan_qa")
+    _require_bool(qa, "controller_reviewed", "lesson_plan_qa")
+    if "source_conflicts" in qa and not isinstance(qa["source_conflicts"], list):
+        raise ValidationError("lesson_plan_qa.source_conflicts must be a list")
+    if qa["status"] in LESSON_PLAN_QA_PASS_STATUSES and not qa["controller_reviewed"]:
+        raise ValidationError("lesson_plan_qa.controller_reviewed is required before pass")
+    if qa["status"] in LESSON_PLAN_QA_PASS_STATUSES:
+        if qa.get("blockers"):
+            raise ValidationError("lesson_plan_qa.blockers must be empty before QA pass")
+    if qa["status"] == "pass":
+        warning_checks = sorted(
+            key
+            for key, value in qa["checks"].items()
+            if value == "pass_with_warnings"
+        ) if isinstance(qa.get("checks"), dict) else []
+        warning_subject_checks = sorted(
+            key
+            for key, value in qa["subject_checks"].items()
+            if value == "pass_with_warnings"
+        ) if isinstance(qa.get("subject_checks"), dict) else []
+        if warning_checks or warning_subject_checks:
+            raise ValidationError("lesson_plan_qa pass_with_warnings check values require status=pass_with_warnings")
+        if qa.get("teacher_confirmation_items"):
+            raise ValidationError("lesson_plan_qa.teacher_confirmation_items require pass_with_warnings or needs_teacher_confirmation")
+        if qa.get("warnings"):
+            raise ValidationError("lesson_plan_qa.warnings require pass_with_warnings or needs_teacher_confirmation")
+        if qa.get("source_conflicts"):
+            raise ValidationError("lesson_plan_qa.source_conflicts require pass_with_warnings or needs_teacher_confirmation")
+    return qa

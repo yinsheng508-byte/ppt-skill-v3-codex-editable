@@ -7,19 +7,24 @@ from typing import Any
 from .deliverable_naming import (
     LEGACY_STAGE2_IMAGE_PDF_REL,
     existing_stage2_image_pdf_rel,
+    existing_stage4_lesson_plan_output_rel,
     existing_stage4_output_rel,
 )
+from .education_context import is_k12_lesson_plan_required, load_education_context
 from .events import append_event
 from .json_io import read_json, write_json
 from .paths import decision_path, decisions_dir
 from .stage3_artifact_hashes import require_no_stage3_stale_artifacts
-from .state import read_state, write_state
+from .state import read_state, set_stage4_lesson_plan_required, stage4_lesson_plan_required, write_state
 from .coordinate_stage3_qa import validate_coordinate_stage3_qa_review
 from .validation import (
     ValidationError,
     validate_controller_decision,
     validate_deck_style,
     validate_layout_intent,
+    validate_lesson_plan_manifest,
+    validate_lesson_plan_qa,
+    validate_speaker_script_manifest,
 )
 
 
@@ -167,7 +172,8 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         state["quality"]["stage3"] = "skipped"
         state["stage4_locked_presentation_source"] = locked_source
         state["user_artifacts"]["stage4_locked_presentation_source"] = locked_source["source_path"]
-        state["next_required_action"] = "由主控大模型基于已确认锁定稿撰写阶段4演讲逐字稿，并生成 Word 与 PDF"
+        lesson_required = _apply_stage4_lesson_plan_requirement(run_dir, state)
+        state["next_required_action"] = _stage4_ready_next_action(lesson_required)
     elif decision_type == "request_stage2_revision":
         state["current_stage"] = "stage2"
         state["status"] = "revision_requested"
@@ -223,7 +229,8 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         state["quality"]["stage3"] = "confirmed"
         state["stage4_locked_presentation_source"] = _stage3_locked_source(editable_manifest)
         state["user_artifacts"]["stage4_locked_presentation_source"] = state["stage4_locked_presentation_source"]["source_path"]
-        state["next_required_action"] = "由主控大模型基于已确认锁定稿撰写阶段4演讲逐字稿，并生成 Word 与 PDF"
+        lesson_required = _apply_stage4_lesson_plan_requirement(run_dir, state)
+        state["next_required_action"] = _stage4_ready_next_action(lesson_required)
     elif decision_type == "request_stage3_revision":
         state["current_stage"] = "stage3"
         state["status"] = "revision_requested"
@@ -233,10 +240,14 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
     elif decision_type == "stage4_script_completed":
         if not decision.get("controller_reviewed"):
             raise ValidationError("stage4_script_completed requires controller_reviewed=true")
+        speaker_manifest_path = Path(run_dir) / "_state" / "阶段4" / "speaker_script_manifest.json"
         _require_file_exists(run_dir, "_state/阶段4/speaker_script_manifest.json", "speaker script manifest is required before completing stage4")
-        stage4_markdown = _require_stage4_output(run_dir, state, "stage4_speaker_script", "speaker script markdown is required before completing stage4")
-        stage4_docx = _require_stage4_output(run_dir, state, "stage4_speaker_script_docx", "speaker script DOCX is required before completing stage4")
-        stage4_pdf = _require_stage4_output(run_dir, state, "stage4_speaker_script_pdf", "speaker script PDF is required before completing stage4")
+        speaker_manifest = validate_speaker_script_manifest(read_json(speaker_manifest_path))
+        if speaker_manifest["status"] != "generated":
+            raise ValidationError("speaker script manifest status must be generated before completing stage4")
+        stage4_markdown = _require_stage4_output(run_dir, state, "stage4_speaker_script", "speaker script markdown is required before completing stage4", manifest=speaker_manifest)
+        stage4_docx = _require_stage4_output(run_dir, state, "stage4_speaker_script_docx", "speaker script DOCX is required before completing stage4", manifest=speaker_manifest)
+        stage4_pdf = _require_stage4_output(run_dir, state, "stage4_speaker_script_pdf", "speaker script PDF is required before completing stage4", manifest=speaker_manifest)
         state["confirmed"]["stage4_speaker_script"] = True
         state.setdefault("user_artifacts", {})["stage4_speaker_script"] = stage4_markdown
         state["user_artifacts"]["stage4_speaker_script_docx"] = stage4_docx
@@ -244,11 +255,42 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         state.setdefault("expected_user_paths", {})["stage4_speaker_script"] = stage4_markdown
         state["expected_user_paths"]["stage4_speaker_script_docx"] = stage4_docx
         state["expected_user_paths"]["stage4_speaker_script_pdf"] = stage4_pdf
+        stage4_outputs = state.setdefault("stage4_outputs", {})
+        speaker_output = stage4_outputs.setdefault("speaker_script", {})
+        speaker_output["required"] = True
+        speaker_output["status"] = "qa_passed"
+        lesson_required = stage4_lesson_plan_required(state)
+        if lesson_required:
+            _require_file_exists(run_dir, "_state/阶段4/lesson_plan_manifest.json", "lesson plan manifest is required before completing K12 stage4")
+            lesson_manifest = validate_lesson_plan_manifest(read_json(Path(run_dir) / "_state" / "阶段4" / "lesson_plan_manifest.json"))
+            if lesson_manifest["status"] != "generated":
+                raise ValidationError("lesson plan manifest status must be generated before completing K12 stage4")
+            if lesson_manifest.get("summary", {}).get("pdf_text_probe") == "no_selectable_text_detected":
+                raise ValidationError("lesson plan PDF selectable text is required before completing K12 stage4")
+            lesson_markdown = _require_stage4_lesson_plan_output(run_dir, state, "stage4_lesson_plan", "lesson plan markdown is required before completing K12 stage4", manifest=lesson_manifest)
+            lesson_docx = _require_stage4_lesson_plan_output(run_dir, state, "stage4_lesson_plan_docx", "lesson plan DOCX is required before completing K12 stage4", manifest=lesson_manifest)
+            lesson_pdf = _require_stage4_lesson_plan_output(run_dir, state, "stage4_lesson_plan_pdf", "lesson plan PDF is required before completing K12 stage4", manifest=lesson_manifest)
+            lesson_qa = _read_optional_lesson_plan_review(run_dir)
+            state["confirmed"]["stage4_lesson_plan"] = True
+            state["user_artifacts"]["stage4_lesson_plan"] = lesson_markdown
+            state["user_artifacts"]["stage4_lesson_plan_docx"] = lesson_docx
+            state["user_artifacts"]["stage4_lesson_plan_pdf"] = lesson_pdf
+            state["expected_user_paths"]["stage4_lesson_plan"] = lesson_markdown
+            state["expected_user_paths"]["stage4_lesson_plan_docx"] = lesson_docx
+            state["expected_user_paths"]["stage4_lesson_plan_pdf"] = lesson_pdf
+            lesson_output = stage4_outputs.setdefault("lesson_plan", {})
+            lesson_output["required"] = True
+            if lesson_qa and lesson_qa["status"] == "pass_with_warnings":
+                lesson_output["status"] = "qa_passed_with_warnings"
+            elif lesson_qa and lesson_qa["status"] == "pass":
+                lesson_output["status"] = "qa_passed"
+            else:
+                lesson_output["status"] = "controller_reviewed"
         state["current_stage"] = "stage4"
         state["status"] = "completed"
         state["required_actor"] = "none"
         state["quality"]["stage4"] = "completed"
-        state["next_required_action"] = "项目已完成，阶段4演讲逐字稿、Word 和 PDF 已输出"
+        state["next_required_action"] = _stage4_completed_next_action(lesson_required)
     else:
         raise ValidationError(f"unsupported decision type: {decision_type}")
 
@@ -302,11 +344,78 @@ def _require_stage2_image_pdf(run_dir: str | Path, state: dict[str, Any], messag
     return relpath
 
 
-def _require_stage4_output(run_dir: str | Path, state: dict[str, Any], artifact_key: str, message: str) -> str:
-    relpath = existing_stage4_output_rel(run_dir, artifact_key, state=state)
+def _require_stage4_output(
+    run_dir: str | Path,
+    state: dict[str, Any],
+    artifact_key: str,
+    message: str,
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> str:
+    relpath = existing_stage4_output_rel(run_dir, artifact_key, state=state, manifest=manifest)
     if not relpath:
         raise ValidationError(message)
     return relpath
+
+
+def _require_stage4_lesson_plan_output(
+    run_dir: str | Path,
+    state: dict[str, Any],
+    artifact_key: str,
+    message: str,
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> str:
+    relpath = existing_stage4_lesson_plan_output_rel(run_dir, artifact_key, state=state, manifest=manifest)
+    if not relpath:
+        raise ValidationError(message)
+    return relpath
+
+
+def _read_optional_lesson_plan_review(run_dir: str | Path) -> dict[str, Any] | None:
+    qa_path = Path(run_dir) / "_state" / "阶段4" / "lesson_plan_qa.json"
+    if not qa_path.exists():
+        return None
+    qa = validate_lesson_plan_qa(read_json(qa_path))
+    if qa["status"] == "fail" or qa.get("blockers"):
+        raise ValidationError("lesson plan self-review records blockers before completing K12 stage4")
+    return qa
+
+
+def _apply_stage4_lesson_plan_requirement(run_dir: str | Path, state: dict[str, Any]) -> bool:
+    try:
+        context = load_education_context(run_dir, state=state)
+    except ValidationError:
+        context = {}
+    if context:
+        state["education_context"] = context
+    required = stage4_lesson_plan_required(state) or is_k12_lesson_plan_required(context)
+    if required:
+        set_stage4_lesson_plan_required(state, required=True, reason=_lesson_plan_required_reason(context))
+    else:
+        set_stage4_lesson_plan_required(state, required=False, skip_reason="education_context 未识别为 K12 课件")
+    return required
+
+
+def _lesson_plan_required_reason(context: dict[str, Any]) -> str:
+    parts = ["K12课件"]
+    for field in ("grade", "subject", "lesson_title"):
+        value = context.get(field)
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    return "｜".join(parts)
+
+
+def _stage4_ready_next_action(lesson_required: bool) -> str:
+    if lesson_required:
+        return "由主控大模型基于已确认锁定稿撰写阶段4演讲逐字稿，并基于 K12 教育上下文与教材资料撰写教案设计，分别生成 Word 与 PDF"
+    return "由主控大模型基于已确认锁定稿撰写阶段4演讲逐字稿，并生成 Word 与 PDF"
+
+
+def _stage4_completed_next_action(lesson_required: bool) -> str:
+    if lesson_required:
+        return "项目已完成，阶段4演讲逐字稿和 K12 教案设计的 Markdown、Word、PDF 已输出"
+    return "项目已完成，阶段4演讲逐字稿、Word 和 PDF 已输出"
 
 
 def _stage3_sample_scope_from_decision(decision: dict[str, Any]) -> dict[str, Any]:
