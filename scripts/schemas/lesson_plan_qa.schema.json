@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v2 K12 Lesson Plan QA",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_name",
+    "run_dir",
+    "status",
+    "teacher_confirmation_items",
+    "controller_reviewed",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "project_name": { "type": "string" },
+    "run_dir": { "type": "string" },
+    "status": { "enum": ["pass", "pass_with_warnings", "needs_controller_review", "needs_teacher_confirmation", "fail"] },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "review_notes": { "type": "array", "items": { "type": "string" } },
+    "checks": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "subject_checks": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "source_conflicts": { "type": "array", "items": { "type": "object" } },
+    "teacher_confirmation_items": { "type": "array", "items": { "type": "string" } },
+    "controller_reviewed": { "type": "boolean" },
+    "created_at": { "type": "string" }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": { "enum": ["pass", "pass_with_warnings"] }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "controller_reviewed": { "const": true },
+          "blockers": { "maxItems": 0 }
+        }
+      }
+    }
+  ]
+}

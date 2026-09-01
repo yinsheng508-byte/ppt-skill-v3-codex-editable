@@ -23,6 +23,10 @@ from .image_api import configure_image_api_key, default_batch_path_for_stage, im
 from .image_packets import dispatch_image_api_packets, dispatch_image_generation_packets
 from .image_results import record_image_result
 from .json_io import read_json
+from .education_context import subject_profile_registry_report
+from .lesson_plan import build_lesson_plan
+from .lesson_plan_context import build_lesson_plan_context, lesson_plan_context_path
+from .lesson_plan_qa import record_lesson_plan_qa
 from .migration_v1 import render_v1_summary_markdown, summarize_v1_project, write_v1_summary
 from .materials import add_material, list_materials
 from .officecli_coordinate_builder import build_officecli_coordinate_deck
@@ -145,6 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_style_template_parser = subparsers.add_parser("resolve-style-template", help="Resolve a style template by id, name, or slash trigger.")
     resolve_style_template_parser.add_argument("--query", required=True)
     validate_style_templates_parser = subparsers.add_parser("validate-style-templates", help="Validate style template registry and markdown files.")
+    validate_k12_profiles_parser = subparsers.add_parser("validate-k12-subject-profiles", help="Validate K12 lesson plan subject profile registry.")
     configure_image_api_parser = subparsers.add_parser("configure-image-api-key", help="Store the image API key in a local user secret file.")
     key_source = configure_image_api_parser.add_mutually_exclusive_group(required=True)
     key_source.add_argument("--api-key")
@@ -309,6 +314,14 @@ def build_parser() -> argparse.ArgumentParser:
     speaker_script_parser = subparsers.add_parser("build-speaker-script", help="Render stage4 speaker script Markdown, DOCX, and PDF.")
     speaker_script_parser.add_argument("--run-dir", required=True)
     speaker_script_parser.add_argument("--script-json", required=True)
+    lesson_context_parser = subparsers.add_parser("build-lesson-plan-context", help="Build K12 stage4 lesson plan context from stage1 and source materials.")
+    lesson_context_parser.add_argument("--run-dir", required=True)
+    lesson_plan_parser = subparsers.add_parser("build-lesson-plan", help="Render K12 stage4 lesson plan Markdown, DOCX, and PDF.")
+    lesson_plan_parser.add_argument("--run-dir", required=True)
+    lesson_plan_parser.add_argument("--lesson-plan-json", required=True)
+    lesson_plan_qa_parser = subparsers.add_parser("record-lesson-plan-qa", help="Record controller-reviewed K12 lesson plan QA.")
+    lesson_plan_qa_parser.add_argument("--run-dir", required=True)
+    lesson_plan_qa_parser.add_argument("--review", required=True)
     doctor_parser = subparsers.add_parser("doctor", help="Check project consistency.")
     doctor_parser.add_argument("--run-dir", required=True)
     v1_summary_parser = subparsers.add_parser("v1-summary", help="Create a read-only v1 project summary.")
@@ -402,6 +415,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "validate-style-templates":
         report = validate_style_templates_report()
+        print(json.dumps(report, ensure_ascii=False))
+        return 0 if report["ok"] else 1
+    if args.command == "validate-k12-subject-profiles":
+        report = subject_profile_registry_report()
         print(json.dumps(report, ensure_ascii=False))
         return 0 if report["ok"] else 1
     if args.command == "configure-image-api-key":
@@ -611,6 +628,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "build-speaker-script":
         manifest = build_speaker_script(args.run_dir, args.script_json)
         print(json.dumps({"status": "speaker_script_built", "manifest": manifest}, ensure_ascii=False))
+        return 0
+    if args.command == "build-lesson-plan-context":
+        context = build_lesson_plan_context(args.run_dir)
+        print(
+            json.dumps(
+                {
+                    "status": "lesson_plan_context_built",
+                    "path": str(lesson_plan_context_path(args.run_dir)),
+                    "context": context,
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    if args.command == "build-lesson-plan":
+        manifest = build_lesson_plan(args.run_dir, args.lesson_plan_json)
+        print(json.dumps({"status": "lesson_plan_built", "manifest": manifest}, ensure_ascii=False))
+        return 0
+    if args.command == "record-lesson-plan-qa":
+        review_path = record_lesson_plan_qa(args.run_dir, args.review)
+        print(json.dumps({"status": "lesson_plan_qa_recorded", "review_path": str(review_path)}, ensure_ascii=False))
         return 0
     if args.command == "v1-summary":
         summary = summarize_v1_project(args.run_dir)

@@ -48,7 +48,11 @@ ACCENT_DARK = "0F4C75"
 def build_speaker_script(run_dir: str | Path, script_json: str | Path) -> dict[str, Any]:
     root = Path(run_dir)
     state = read_state(root)
-    if state["current_stage"] != "stage4" or state["status"] not in {"ready_for_stage4_script", "stage4_script_generated"}:
+    if state["current_stage"] != "stage4" or state["status"] not in {
+        "ready_for_stage4_script",
+        "stage4_script_generated",
+        "stage4_lesson_plan_generated",
+    }:
         raise ValidationError("speaker script generation requires stage4 ready_for_stage4_script state")
 
     script = validate_speaker_script(read_json(script_json))
@@ -121,7 +125,7 @@ def build_speaker_script(run_dir: str | Path, script_json: str | Path) -> dict[s
     state["expected_user_paths"]["stage4_speaker_script_docx"] = docx_rel
     state["expected_user_paths"]["stage4_speaker_script_pdf"] = pdf_rel
     state["quality"]["stage4"] = "pending_controller_review"
-    state["next_required_action"] = "主控大模型检查阶段4讲稿、Word 和 PDF；通过后记录 stage4_script_completed 决策"
+    state["next_required_action"] = "主控大模型检查阶段4讲稿、Word 和 PDF；通过后记录阶段4输出完成决策"
     write_state(root, state)
     append_event(root, "speaker_script_generated", "runtime", slides=len(script["slides"]))
     return manifest
@@ -317,12 +321,52 @@ def _set_style_font(style, font_name: str, size_pt: float, color: RGBColor, *, b
     lang.set(qn("w:eastAsia"), "zh-CN")
 
 
+def _set_run_east_asia(run, font_name: str) -> None:
+    r_pr = run._element.get_or_add_rPr()
+    r_fonts = r_pr.get_or_add_rFonts()
+    r_fonts.set(qn("w:eastAsia"), font_name)
+
+
 def _paragraph_border(paragraph, *, left: str | None = None, bottom: str | None = None) -> None:
     p_pr = paragraph._p.get_or_add_pPr()
     p_bdr = p_pr.find(qn("w:pBdr"))
     if p_bdr is None:
         p_bdr = OxmlElement("w:pBdr")
-        p_pr.append(p_bdr)
+        insert_before = {
+            "w:shd",
+            "w:tabs",
+            "w:suppressAutoHyphens",
+            "w:kinsoku",
+            "w:wordWrap",
+            "w:overflowPunct",
+            "w:topLinePunct",
+            "w:autoSpaceDE",
+            "w:autoSpaceDN",
+            "w:bidi",
+            "w:adjustRightInd",
+            "w:snapToGrid",
+            "w:spacing",
+            "w:ind",
+            "w:contextualSpacing",
+            "w:mirrorIndents",
+            "w:suppressOverlap",
+            "w:jc",
+            "w:textDirection",
+            "w:textAlignment",
+            "w:textboxTightWrap",
+            "w:outlineLvl",
+            "w:divId",
+            "w:cnfStyle",
+            "w:rPr",
+            "w:sectPr",
+            "w:pPrChange",
+        }
+        for index, child in enumerate(p_pr):
+            if child.tag in {qn(tag) for tag in insert_before}:
+                p_pr.insert(index, p_bdr)
+                break
+        else:
+            p_pr.append(p_bdr)
     for side, color in {"left": left, "bottom": bottom}.items():
         if not color:
             continue
@@ -337,10 +381,15 @@ def _paragraph_border(paragraph, *, left: str | None = None, bottom: str | None 
 
 
 def _add_rule(doc: Document, color: str) -> None:
-    paragraph = doc.add_paragraph()
+    paragraph = doc.add_paragraph(style="Talk Meta")
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.space_before = Pt(2)
     paragraph.paragraph_format.space_after = Pt(10)
-    _paragraph_border(paragraph, bottom=color)
+    run = paragraph.add_run("-" * 64)
+    run.font.name = FONT_FAMILY
+    run.font.size = Pt(5)
+    run.font.color.rgb = RGBColor.from_string(color)
+    _set_run_east_asia(run, FONT_FAMILY)
 
 
 def _find_pdf_font_path() -> Path:
@@ -617,19 +666,18 @@ def _write_generation_note(root: Path, script: dict[str, Any], manifest: dict[st
     lines.extend(
         [
             "",
-            "## 生成路线",
+            "## 依据与范围",
             "",
-            f"- 主控大模型基于已确认锁定稿撰写逐页演讲稿：{_locked_source_description(locked_source)}。",
-            "- 逐字稿按 PPT 页码自然展开；主控按内容需要判断是否补充权威资料，不改写 PPT 结论。",
-            "- Runtime 基于 `speaker_script.json` 生成 Markdown、Word 和 PDF。",
+            f"- 本讲稿依据{_locked_source_description(locked_source)}和阶段1页面内容形成。",
+            "- 逐字稿按 PPT 页码自然展开；需要补充背景时，只补足听众理解，不改写 PPT 结论。",
             "- Word/PDF 不设置单独封面页；演讲标题和讲者身份作为第一页顶部题头，随后直接进入逐页正文。",
+            "",
+            "## 基础检查",
+            "",
+            "- 已生成 Markdown、Word 和 PDF 三种讲稿文件。",
             f"- Word 使用结构化样式、中文字体与语言属性（{FONT_FAMILY} / zh-CN）。",
-            "- PDF 文字可选择，不使用整页图片拼接；默认嵌入中文字体，必要时回退为 Word 转换。",
-            "",
-            "## 检查状态",
-            "",
-            f"- Manifest：{MANIFEST_REL}",
-            "- 主控检查通过后记录 `stage4_script_completed` 决策，项目完成。",
+            f"- PDF 文本状态：{_pdf_text_probe_label(manifest['summary'].get('pdf_text_probe'))}。",
+            "- 主控检查通过后，本项目阶段4即可完成。",
             "",
         ]
     )
@@ -638,12 +686,22 @@ def _write_generation_note(root: Path, script: dict[str, Any], manifest: dict[st
 
 def _locked_source_description(locked_source: dict[str, str]) -> str:
     labels = {
-        "stage3_editable_deck": "阶段3可编辑 PPT",
-        "stage2_image_deck": "阶段2图片版 PDF（跳过 Skill 阶段3）",
-        "external_editable_deck": "外部工具生成并由用户确认的锁定稿",
+        "stage3_editable_deck": "已确认的可编辑课件",
+        "stage2_image_deck": "已确认的图片版课件",
+        "external_editable_deck": "用户确认的外部课件",
     }
-    label = labels.get(locked_source["source_mode"], locked_source["source_mode"])
-    return f"{label}（{locked_source['source_path']}）"
+    label = labels.get(locked_source["source_mode"], "已确认课件")
+    source_path = locked_source.get("source_path")
+    source_name = Path(source_path).name if isinstance(source_path, str) and source_path.strip() else ""
+    return f"{label}（{source_name}）" if source_name else label
+
+
+def _pdf_text_probe_label(value: Any) -> str:
+    if value == "selectable_text_detected":
+        return "已检测到可选择文本"
+    if value == "no_selectable_text_detected":
+        return "暂未检测到可选择文本，交付前需复核"
+    return "已生成，建议打开抽查"
 
 
 def _file_entry(label: str, root: Path, relative: str) -> dict[str, str]:

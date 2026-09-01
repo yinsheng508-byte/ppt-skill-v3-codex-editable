@@ -113,7 +113,7 @@ def refresh_material_docs(run_dir: str | Path) -> None:
         "",
         f"已登记资料数量：{len(materials)}",
         "",
-        "## Runtime 登记概览",
+        "## 资料登记概览",
         "",
         *_summary_lines(materials),
         "",
@@ -123,7 +123,7 @@ def refresh_material_docs(run_dir: str | Path) -> None:
         preserved_summary,
         CONTROLLER_SUMMARY_END,
         "",
-        "Runtime 只登记和归档资料，不生成正式阶段1规划。",
+        "当前步骤只登记和归档资料，不生成正式阶段1规划。",
         "",
     ]
     summary_path.write_text("\n".join(summary), encoding="utf-8")

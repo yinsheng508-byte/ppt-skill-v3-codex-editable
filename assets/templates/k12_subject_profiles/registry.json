@@ -1,0 +1,155 @@
+{
+  "schema_version": "1.0",
+  "source_note": "这些 profile 只作为 AI 主控的学科写作提醒，帮助教案自然体现学科任务、评价证据与安全边界；不作为独立必填字段或程序硬门禁。",
+  "group_defaults": {
+    "language": {
+      "competency_labels": ["文化自信", "语言运用", "思维能力", "审美创造"],
+      "suggested_focus_fields": ["text_focus", "key_language_points", "reading_methods", "question_chain", "recitation_or_reading_plan", "comparative_reading", "writing_transfer"],
+      "qa_focus": ["文本解读准确", "问题链由浅入深", "不大段复刻课文"]
+    },
+    "math": {
+      "competency_labels": ["数学眼光", "数学思维", "数学语言"],
+      "suggested_focus_fields": ["concept_path", "example_chain", "variant_training", "common_errors", "board_work_plan", "practice_ladder", "mathematical_methods"],
+      "qa_focus": ["概念路径清楚", "例题和变式有梯度", "符号与计算正确"]
+    },
+    "foreign_language": {
+      "competency_labels": ["语言能力", "文化意识", "思维品质", "学习能力"],
+      "suggested_focus_fields": ["language_points", "discourse_context", "input_tasks", "output_tasks", "interaction_patterns", "culture_notes", "assessment_language"],
+      "qa_focus": ["输入输出平衡", "语篇语境一致", "交际目的真实"]
+    },
+    "science": {
+      "competency_labels": ["科学观念", "科学思维", "探究实践", "态度责任"],
+      "suggested_focus_fields": ["experiment_plan", "phenomena_and_conclusions", "model_building", "formula_or_equation_reasoning", "equipment_or_chemicals", "safety_and_waste"],
+      "qa_focus": ["实验步骤可执行", "现象结论对应", "安全提示完整"]
+    },
+    "humanities": {
+      "competency_labels": ["证据意识", "综合思维", "价值判断", "实践参与"],
+      "suggested_focus_fields": ["issue_or_source_contexts", "map_or_material_tasks", "evidence_questions", "interpretation_or_value_tasks", "transfer_practice"],
+      "qa_focus": ["材料或案例准确", "证据推理清楚", "价值辨析不过度口号化"]
+    },
+    "arts": {
+      "competency_labels": ["审美感知", "艺术表现", "创意实践", "文化理解"],
+      "suggested_focus_fields": ["artwork_appreciation", "technique_demo", "creative_task", "materials_tools", "critique_rubric"],
+      "qa_focus": ["欣赏示范实践评价闭环", "材料工具可执行", "评价量规清楚"]
+    },
+    "integrated": {
+      "competency_labels": ["价值体认", "责任担当", "问题解决", "创意物化"],
+      "suggested_focus_fields": ["real_world_task", "project_steps", "practice_record", "deliverable_rubric"],
+      "qa_focus": ["真实任务明确", "实践步骤可执行", "成果评价清楚"]
+    }
+  },
+  "subjects": [
+    {
+      "subject": "语文",
+      "aliases": ["中文"],
+      "subject_group": "language",
+      "competency_labels": ["文化自信", "语言运用", "思维能力", "审美创造"],
+      "suggested_focus_fields": ["text_focus", "key_language_points", "reading_methods", "question_chain", "recitation_or_reading_plan", "comparative_reading", "writing_transfer"],
+      "qa_focus": ["文本解读准确", "问题链由浅入深", "不大段复刻课文"]
+    },
+    {
+      "subject": "数学",
+      "aliases": [],
+      "subject_group": "math",
+      "competency_labels": ["数学眼光", "数学思维", "数学语言"],
+      "suggested_focus_fields": ["concept_path", "example_chain", "variant_training", "common_errors", "board_work_plan", "practice_ladder", "mathematical_methods", "reasoning_or_proof", "diagnostic_assessment"],
+      "qa_focus": ["概念路径清楚", "例题链和变式训练有梯度", "易错点诊断与板演安排明确"]
+    },
+    {
+      "subject": "英语",
+      "aliases": ["英文", "外语"],
+      "subject_group": "foreign_language",
+      "competency_labels": ["语言能力", "文化意识", "思维品质", "学习能力"],
+      "suggested_focus_fields": ["language_points", "language_function", "discourse_context", "input_tasks", "output_tasks", "interaction_patterns", "culture_notes", "scaffolding_sentences", "assessment_language"],
+      "qa_focus": ["语言功能与语篇语境一致", "输入输出任务平衡", "评价语言能观察学生表达"]
+    },
+    {
+      "subject": "物理",
+      "aliases": [],
+      "subject_group": "science",
+      "competency_labels": ["物理观念", "科学思维", "科学探究", "科学态度与责任"],
+      "suggested_focus_fields": ["phenomena_context", "experiment_plan", "model_building", "formula_reasoning", "data_processing", "safety_notes"],
+      "qa_focus": ["物理现象与模型对应", "公式推理过程清楚", "实验与数据处理可执行"]
+    },
+    {
+      "subject": "化学",
+      "aliases": [],
+      "subject_group": "science",
+      "competency_labels": ["化学观念", "科学思维", "科学探究与实践", "科学态度与责任"],
+      "suggested_focus_fields": ["experiment_plan", "phenomena_and_conclusions", "model_building", "formula_or_equation_reasoning", "equipment_or_chemicals", "safety_and_waste"],
+      "qa_focus": ["实验步骤可执行", "现象结论对应", "药品安全与废液处理完整"]
+    },
+    {
+      "subject": "生物",
+      "aliases": ["生物学"],
+      "subject_group": "science",
+      "competency_labels": ["生命观念", "科学思维", "探究实践", "态度责任"],
+      "suggested_focus_fields": ["life_concept", "observation_or_experiment", "model_building", "evidence_reasoning", "ethics_or_health_connection"],
+      "qa_focus": ["生命现象与概念对应", "观察实验任务可执行", "证据推理清楚"]
+    },
+    {
+      "subject": "科学",
+      "aliases": [],
+      "subject_group": "science",
+      "competency_labels": ["科学观念", "科学思维", "探究实践", "态度责任"],
+      "suggested_focus_fields": ["phenomena_context", "inquiry_question", "experiment_or_engineering_task", "evidence_record", "safety_notes"],
+      "qa_focus": ["探究问题清楚", "证据记录可执行", "安全提示完整"]
+    },
+    {
+      "subject": "政治/道德与法治",
+      "aliases": ["政治", "道德与法治", "道法", "思想政治"],
+      "subject_group": "humanities",
+      "competency_labels": ["政治认同", "道德修养", "法治观念", "健全人格", "责任意识"],
+      "suggested_focus_fields": ["issue_context", "value_discussion", "law_or_rule_basis", "public_participation_task", "case_analysis", "behavior_transfer", "reflection_prompt"],
+      "qa_focus": ["议题真实且价值辨析有边界", "案例与规则依据准确", "公共参与任务可执行"]
+    },
+    {
+      "subject": "历史",
+      "aliases": [],
+      "subject_group": "humanities",
+      "competency_labels": ["唯物史观", "时空观念", "史料实证", "历史解释", "家国情怀"],
+      "suggested_focus_fields": ["timeline_or_map", "source_contexts", "evidence_questions", "historical_interpretation", "comparison_or_transfer"],
+      "qa_focus": ["时空线索准确", "史料任务有证据链", "历史解释不过度结论化"]
+    },
+    {
+      "subject": "地理",
+      "aliases": [],
+      "subject_group": "humanities",
+      "competency_labels": ["人地协调观", "综合思维", "区域认知", "地理实践力"],
+      "suggested_focus_fields": ["map_chart_tasks", "regional_case", "scale_and_location", "human_environment_question", "geography_practice", "data_interpretation", "transfer_practice"],
+      "qa_focus": ["地图图表任务清楚", "区域案例与尺度意识准确", "地理实践或迁移任务可执行"]
+    },
+    {
+      "subject": "美术/艺术",
+      "aliases": ["美术", "艺术", "音乐"],
+      "subject_group": "arts",
+      "competency_labels": ["审美感知", "艺术表现", "创意实践", "文化理解"],
+      "suggested_focus_fields": ["artwork_appreciation", "visual_language", "technique_demo", "creative_task", "materials_tools", "process_scaffold", "critique_rubric"],
+      "qa_focus": ["欣赏示范实践评价闭环", "材料工具和技法步骤可执行", "评价量规清楚"]
+    },
+    {
+      "subject": "信息科技",
+      "aliases": ["信息技术"],
+      "subject_group": "integrated",
+      "competency_labels": ["信息意识", "计算思维", "数字化学习与创新", "信息社会责任"],
+      "suggested_focus_fields": ["computational_task", "digital_tool_use", "data_or_algorithm_activity", "security_and_ethics", "project_deliverable"],
+      "qa_focus": ["计算思维任务明确", "数字工具使用可执行", "信息安全与伦理提示完整"]
+    },
+    {
+      "subject": "劳动",
+      "aliases": [],
+      "subject_group": "integrated",
+      "competency_labels": ["劳动观念", "劳动能力", "劳动习惯和品质", "劳动精神"],
+      "suggested_focus_fields": ["labor_task", "operation_steps", "tool_and_materials", "safety_notes", "habit_reflection"],
+      "qa_focus": ["劳动任务真实", "操作步骤安全可执行", "习惯与品质目标明确"]
+    },
+    {
+      "subject": "体育与健康",
+      "aliases": ["体育"],
+      "subject_group": "integrated",
+      "competency_labels": ["运动能力", "健康行为", "体育品德"],
+      "suggested_focus_fields": ["skill_drill", "load_control", "safety_protection", "health_behavior", "teamwork_or_sportsmanship"],
+      "qa_focus": ["运动负荷可控", "安全保护明确", "健康行为与体育品德有观察证据"]
+    }
+  ]
+}

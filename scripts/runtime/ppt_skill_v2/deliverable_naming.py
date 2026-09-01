@@ -14,6 +14,9 @@ LEGACY_STAGE3_EDITABLE_PPTX_REL = "阶段3_可编辑PPT/ppt/可编辑PPT.pptx"
 LEGACY_STAGE4_MARKDOWN_REL = "阶段4_演讲稿输出/演讲逐字稿.md"
 LEGACY_STAGE4_DOCX_REL = "阶段4_演讲稿输出/docx/演讲逐字稿.docx"
 LEGACY_STAGE4_PDF_REL = "阶段4_演讲稿输出/pdf/演讲逐字稿.pdf"
+LEGACY_STAGE4_LESSON_PLAN_MARKDOWN_REL = "阶段4_演讲稿输出/教案设计/教案设计.md"
+LEGACY_STAGE4_LESSON_PLAN_DOCX_REL = "阶段4_演讲稿输出/教案设计/docx/教案设计.docx"
+LEGACY_STAGE4_LESSON_PLAN_PDF_REL = "阶段4_演讲稿输出/教案设计/pdf/教案设计.pdf"
 
 _ILLEGAL_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 _WHITESPACE = re.compile(r"\s+")
@@ -45,6 +48,9 @@ def project_deliverable_relpaths(
         "stage4_speaker_script": f"阶段4_演讲稿输出/{topic}{SEPARATOR}逐字稿.md",
         "stage4_speaker_script_docx": f"阶段4_演讲稿输出/docx/{topic}{SEPARATOR}逐字稿.docx",
         "stage4_speaker_script_pdf": f"阶段4_演讲稿输出/pdf/{topic}{SEPARATOR}逐字稿.pdf",
+        "stage4_lesson_plan": f"阶段4_演讲稿输出/教案设计/{topic}{SEPARATOR}教案设计.md",
+        "stage4_lesson_plan_docx": f"阶段4_演讲稿输出/教案设计/docx/{topic}{SEPARATOR}教案设计.docx",
+        "stage4_lesson_plan_pdf": f"阶段4_演讲稿输出/教案设计/pdf/{topic}{SEPARATOR}教案设计.pdf",
     }
 
 
@@ -56,14 +62,12 @@ def deliverable_topic(
 ) -> str:
     root = Path(run_dir)
     candidates: list[Any] = []
+    if isinstance(script, dict):
+        candidates.extend(_script_topic_candidates(script))
     content = _read_json(root / "_state" / "阶段1" / "content.json")
     candidates.extend(_content_topic_candidates(content))
     stage1_slides = _read_json(root / "_state" / "阶段1" / "slides.json")
     candidates.extend(_stage1_slide_topic_candidates(stage1_slides))
-    if isinstance(script, dict):
-        talk = script.get("talk")
-        if isinstance(talk, dict):
-            candidates.append(talk.get("title"))
     if isinstance(state, dict):
         candidates.append(state.get("project_name"))
     candidates.append(root.name)
@@ -165,6 +169,49 @@ def existing_stage4_output_rel(
     )
 
 
+def existing_stage4_lesson_plan_output_rel(
+    run_dir: str | Path,
+    artifact_key: str,
+    *,
+    state: dict[str, Any] | None = None,
+    lesson_plan: dict[str, Any] | None = None,
+    manifest: dict[str, Any] | None = None,
+) -> str | None:
+    root = Path(run_dir)
+    supported = {"stage4_lesson_plan", "stage4_lesson_plan_docx", "stage4_lesson_plan_pdf"}
+    if artifact_key not in supported:
+        raise ValueError(f"unsupported stage4 lesson plan artifact key: {artifact_key}")
+    if manifest is None:
+        manifest = _read_json(root / "_state" / "阶段4" / "lesson_plan_manifest.json")
+    relpaths = project_deliverable_relpaths(root, state=state, script=lesson_plan)
+    legacy = {
+        "stage4_lesson_plan": LEGACY_STAGE4_LESSON_PLAN_MARKDOWN_REL,
+        "stage4_lesson_plan_docx": LEGACY_STAGE4_LESSON_PLAN_DOCX_REL,
+        "stage4_lesson_plan_pdf": LEGACY_STAGE4_LESSON_PLAN_PDF_REL,
+    }
+    globs = {
+        "stage4_lesson_plan": root / "阶段4_演讲稿输出" / "教案设计",
+        "stage4_lesson_plan_docx": root / "阶段4_演讲稿输出" / "教案设计" / "docx",
+        "stage4_lesson_plan_pdf": root / "阶段4_演讲稿输出" / "教案设计" / "pdf",
+    }
+    suffixes = {
+        "stage4_lesson_plan": ".md",
+        "stage4_lesson_plan_docx": ".docx",
+        "stage4_lesson_plan_pdf": ".pdf",
+    }
+    return _first_existing_relpath(
+        root,
+        [
+            _manifest_file_path(manifest, suffixes[artifact_key]),
+            _state_path(state, "user_artifacts", artifact_key),
+            _state_path(state, "expected_user_paths", artifact_key),
+            relpaths[artifact_key],
+            legacy[artifact_key],
+            *[str(path.relative_to(root)) for path in sorted(globs[artifact_key].glob(f"*{SEPARATOR}教案设计{suffixes[artifact_key]}"))],
+        ],
+    )
+
+
 def _read_json(path: Path) -> Any:
     if not path.exists():
         return None
@@ -186,6 +233,18 @@ def _content_topic_candidates(content: Any) -> list[Any]:
             candidates.extend(item for item in visible_text if isinstance(item, str) and item.strip())
         candidates.append(first_slide.get("title"))
     candidates.append(content.get("deck_title"))
+    return candidates
+
+
+def _script_topic_candidates(script: dict[str, Any]) -> list[Any]:
+    candidates: list[Any] = []
+    talk = script.get("talk")
+    if isinstance(talk, dict):
+        candidates.append(talk.get("title"))
+    education_context = script.get("education_context")
+    if isinstance(education_context, dict):
+        candidates.append(education_context.get("lesson_title"))
+    candidates.append(script.get("lesson_title"))
     return candidates
 
 

@@ -26,6 +26,30 @@
       "enum": ["main_controller", "user", "runtime", "image_provider", "editable_ppt_provider", "none"]
     },
     "last_decision_id": { "type": ["string", "null"] },
+    "stage4_outputs": {
+      "type": "object",
+      "properties": {
+        "speaker_script": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean" },
+            "status": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "lesson_plan": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean" },
+            "required_reason": { "type": ["string", "null"] },
+            "status": { "type": "string" },
+            "skip_reason": { "type": ["string", "null"] }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
     "confirmed": { "type": "object" },
     "user_artifacts": { "type": "object" },
     "expected_user_paths": { "type": "object" },

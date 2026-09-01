@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v2 K12 Lesson Plan Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_name",
+    "run_dir",
+    "files",
+    "conversion",
+    "summary",
+    "created_at",
+    "status"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "project_name": { "type": "string" },
+    "run_dir": { "type": "string" },
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["label", "path", "sha256"],
+        "properties": {
+          "label": { "type": "string" },
+          "path": { "type": "string" },
+          "sha256": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "conversion": {
+      "type": "object",
+      "required": ["source", "pdf_path", "tool"],
+      "properties": {
+        "source": { "type": "string" },
+        "paired_docx": { "type": "string" },
+        "pdf_path": { "type": "string" },
+        "tool": { "type": "string" },
+        "tool_version": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "summary": {
+      "type": "object",
+      "required": ["periods", "activities", "subject_group", "word_table_mode"],
+      "properties": {
+        "periods": { "type": "integer", "minimum": 1 },
+        "activities": { "type": "integer", "minimum": 1 },
+        "subject_group": { "type": "string" },
+        "pdf_pages": { "type": "integer", "minimum": 1 },
+        "pdf_text_probe": { "type": "string" },
+        "word_table_mode": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "created_at": { "type": "string" },
+    "status": { "enum": ["generated", "needs_review", "failed"] }
+  },
+  "additionalProperties": true
+}

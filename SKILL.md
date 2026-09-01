@@ -57,7 +57,7 @@ description: "中文 AI PPT 主控 Skill。用于新建、改造、美化、审�
 - 阶段2固定确认封面风格和图片版 PDF；试样确认不替代图片版 PDF 确认。
 - 阶段3是 Skill 内正式可编辑 PPT 路线，默认走 OfficeCLI；执行时先确认文字坐标复刻，再确认可编辑 PPT。
 - Canva 是阶段外辅助编辑，可以修字和调样式，但不自动算阶段3完成。
-- 阶段4基于已确认锁定稿输出演讲逐字稿、Word 和 PDF；锁定稿可以来自阶段3、阶段2图片版 PDF，或用户确认的外部稿。
+- 阶段4基于已确认锁定稿输出演讲逐字稿、Word 和 PDF；锁定稿可以来自阶段3、阶段2图片版 PDF，或用户确认的外部稿。K12 课件项目可在阶段4同时输出教案设计。
 
 ## 项目目录边界
 
@@ -86,6 +86,7 @@ outputs/projects/<中文项目名>/
 - 阶段3可编辑 PPT、文字填字、OfficeCLI 和证据回写：按需读 [可编辑PPT路线.md](references/可编辑PPT路线.md)、[阶段3文字填字规划规范.md](references/阶段3文字填字规划规范.md)、[阶段3插件主控与可编辑PPT规范.md](references/阶段3插件主控与可编辑PPT规范.md)。
 - QA、doctor 和交付审查：读 [QA与doctor规范.md](references/QA与doctor规范.md)，详细检查项读 [质量审查标准.md](references/质量审查标准.md)。
 - 阶段4演讲稿、Word 和 PDF：读 [阶段4演讲稿输出规范.md](references/阶段4演讲稿输出规范.md)。
+- K12 课件、教案设计、教育上下文、学科扩展或阶段4教案 Word/PDF：读 [K12教案设计规范.md](references/K12教案设计规范.md)。
 
 ## 停下来汇报
 

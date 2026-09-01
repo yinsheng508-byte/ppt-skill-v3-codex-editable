@@ -7,6 +7,7 @@ from typing import Any
 from .deliverable_naming import (
     existing_stage2_image_pdf_rel,
     existing_stage3_editable_deck_rel,
+    existing_stage4_lesson_plan_output_rel,
     existing_stage4_output_rel,
 )
 from .json_io import read_json
@@ -14,8 +15,11 @@ from .coordinate_stage3_qa import COORDINATE_QA_CHECK_KEYS, validate_coordinate_
 from .image_geometry import read_image_dimensions
 from .officecli_utils import SLIDE_HEIGHT_PT, SLIDE_WIDTH_PT
 from .stage3_artifact_hashes import stage3_artifacts_stale
+from .state import stage4_lesson_plan_required
 from .validation import (
     TEXT_FILL_EXECUTION_ACTUAL_SOURCES,
+    validate_lesson_plan_manifest,
+    validate_lesson_plan_qa,
     validate_speaker_script_manifest,
     validate_stage2_aesthetic_review,
 )
@@ -454,7 +458,10 @@ def _check_stage4_consistency(root: Path, issues: list[str], warnings: list[str]
 
     status = state.get("status")
     _check_stage4_locked_source(root, state, issues)
-    if status in {"stage4_script_generated", "completed"}:
+    speaker_generated = status in {"stage4_script_generated", "completed"} or any(
+        path is not None and path.exists() for path in (markdown, docx, pdf)
+    )
+    if speaker_generated:
         for path, label in [(markdown, "逐字稿 Markdown"), (docx, "逐字稿 Word"), (pdf, "逐字稿 PDF"), (note, "讲稿生成说明.md")]:
             if path is None or not path.exists():
                 issues.append(f"阶段4缺少{label}")
@@ -472,9 +479,80 @@ def _check_stage4_consistency(root: Path, issues: list[str], warnings: list[str]
                 issues.append(f"speaker_script_manifest.json 缺少文件记录：{expected}")
         if manifest.get("summary", {}).get("pdf_text_probe") == "no_selectable_text_detected":
             issues.append("阶段4 PDF 未检测到可选择文本")
-    elif status == "ready_for_stage4_script":
+    elif status == "stage4_lesson_plan_generated":
+        warnings.append("阶段4教案已生成，但讲稿尚未生成或未入账")
+
+    if stage4_lesson_plan_required(state):
+        lesson_manifest_exists = (root / "_state" / "阶段4" / "lesson_plan_manifest.json").exists()
+        if status == "completed" or status == "stage4_lesson_plan_generated" or lesson_manifest_exists:
+            _check_stage4_lesson_plan_consistency(root, state, issues, warnings)
+        elif status == "stage4_script_generated":
+            warnings.append("K12阶段4讲稿已生成，教案设计尚未生成或未入账")
+    if status == "ready_for_stage4_script":
         if manifest_path.exists():
             warnings.append("阶段4状态仍待生成讲稿，但已存在 speaker_script_manifest.json；请以 project_state 为准")
+        if stage4_lesson_plan_required(state) and (root / "_state" / "阶段4" / "lesson_plan_manifest.json").exists():
+            warnings.append("阶段4状态仍待生成产物，但已存在 lesson_plan_manifest.json；请以 project_state 为准")
+
+
+def _check_stage4_lesson_plan_consistency(root: Path, state: dict[str, Any], issues: list[str], warnings: list[str]) -> None:
+    manifest_path = root / "_state" / "阶段4" / "lesson_plan_manifest.json"
+    qa_path = root / "_state" / "阶段4" / "lesson_plan_qa.json"
+    note = root / "阶段4_演讲稿输出" / "教案设计" / "教案生成说明.md"
+    if not manifest_path.exists():
+        issues.append("K12阶段4缺少 lesson_plan_manifest.json")
+        return
+    try:
+        manifest = validate_lesson_plan_manifest(read_json(manifest_path))
+    except Exception as exc:
+        issues.append(f"lesson_plan_manifest.json 无法通过校验：{exc}")
+        return
+    markdown_rel = existing_stage4_lesson_plan_output_rel(root, "stage4_lesson_plan", state=state, manifest=manifest)
+    docx_rel = existing_stage4_lesson_plan_output_rel(root, "stage4_lesson_plan_docx", state=state, manifest=manifest)
+    pdf_rel = existing_stage4_lesson_plan_output_rel(root, "stage4_lesson_plan_pdf", state=state, manifest=manifest)
+    for relpath, label in [(markdown_rel, "教案 Markdown"), (docx_rel, "教案 Word"), (pdf_rel, "教案 PDF")]:
+        if not relpath or not (root / relpath).exists():
+            issues.append(f"K12阶段4缺少{label}")
+    if not note.exists():
+        warnings.append("K12阶段4缺少教案生成说明.md")
+    known = {file_info.get("path") for file_info in manifest.get("files", []) if isinstance(file_info, dict)}
+    for expected in {markdown_rel, docx_rel, pdf_rel}:
+        if expected and expected not in known:
+            issues.append(f"lesson_plan_manifest.json 缺少文件记录：{expected}")
+    _check_manifest_file_hashes(root, manifest, "lesson_plan_manifest.json", issues)
+    if manifest.get("summary", {}).get("pdf_text_probe") == "no_selectable_text_detected":
+        issues.append("K12阶段4教案 PDF 未检测到可选择文本")
+    if qa_path.exists():
+        try:
+            qa = validate_lesson_plan_qa(read_json(qa_path))
+        except Exception as exc:
+            issues.append(f"lesson_plan_qa.json 无法通过校验：{exc}")
+            return
+        if qa.get("status") == "fail" or qa.get("blockers"):
+            issues.append("lesson_plan_qa.json 记录了阻断项")
+        if qa.get("status") == "pass_with_warnings" or qa.get("warnings"):
+            warnings.append("lesson_plan_qa.json 记录了 warning，完成前请主控确认不影响交付")
+        if qa.get("status") == "needs_controller_review" and state.get("status") != "completed":
+            warnings.append("lesson_plan_qa.json 仍是运行时自审草稿，完成决策前请主控完成语义复核")
+        if qa.get("teacher_confirmation_items"):
+            warnings.append("lesson_plan_qa.json 仍包含教师课前确认提示，请确认这些项不影响交付")
+
+
+def _check_manifest_file_hashes(root: Path, manifest: dict[str, Any], label: str, issues: list[str]) -> None:
+    for file_info in manifest.get("files", []):
+        if not isinstance(file_info, dict):
+            continue
+        relpath = file_info.get("path")
+        expected_sha = file_info.get("sha256")
+        if not isinstance(relpath, str) or not relpath.strip() or not isinstance(expected_sha, str):
+            continue
+        path = root / relpath
+        if not path.exists():
+            issues.append(f"{label} 记录的文件不存在：{relpath}")
+            continue
+        actual_sha = f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+        if expected_sha.startswith("sha256:") and actual_sha != expected_sha:
+            issues.append(f"{label} 文件 sha256 不匹配：{relpath}")
 
 
 def _stage4_source_mode(state: dict[str, Any]) -> str | None:

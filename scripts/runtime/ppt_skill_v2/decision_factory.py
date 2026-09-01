@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from .decisions import record_decision
+from .education_context import is_k12_lesson_plan_required, load_education_context
 from .paths import decisions_dir
-from .state import read_state
+from .state import read_state, stage4_lesson_plan_required
 from .time_utils import now_iso
 from .validation import (
     DECISION_ROUTES,
@@ -76,7 +77,7 @@ def make_decision(
     if image_generation_route:
         basis["image_generation_route"] = image_generation_route
     execution: dict[str, Any] = {
-        "allowed_actions": allowed_actions if allowed_actions is not None else DEFAULT_ALLOWED_ACTIONS.get(decision_type, []),
+        "allowed_actions": allowed_actions if allowed_actions is not None else _default_allowed_actions(root, state, decision_type),
     }
     if slide_indices:
         execution["slide_indices"] = _normalize_slide_indices(slide_indices)
@@ -114,6 +115,25 @@ def _next_decision_id(root: Path, decision_type: str) -> str:
         if prefix.isdigit():
             max_index = max(max_index, int(prefix))
     return f"{max_index + 1:04d}_{decision_type}"
+
+
+def _default_allowed_actions(root: Path, state: dict[str, Any], decision_type: str) -> list[str]:
+    actions = list(DEFAULT_ALLOWED_ACTIONS.get(decision_type, []))
+    if decision_type in {"approve_stage2_skip_stage3_start_script_output", "approve_stage3_start_script_output"} and _requires_lesson_plan(root, state):
+        for action in ("author_stage4_lesson_plan", "render_stage4_lesson_plan_docx_pdf"):
+            if action not in actions:
+                actions.append(action)
+    return actions
+
+
+def _requires_lesson_plan(root: Path, state: dict[str, Any]) -> bool:
+    if stage4_lesson_plan_required(state):
+        return True
+    try:
+        context = load_education_context(root, state=state)
+    except ValidationError:
+        return False
+    return is_k12_lesson_plan_required(context)
 
 
 def _normalize_slide_indices(slide_indices: list[int]) -> list[int]:

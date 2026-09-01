@@ -47,7 +47,7 @@ def sync_stage_docs(run_dir: str | Path) -> None:
     )
     _write_if_missing(
         root / "阶段0_资料整理" / "资料摘要.md",
-        "# 资料摘要\n\n暂无摘要。主控大模型根据资料整理，不由 Runtime 自动生成正式规划。\n",
+        "# 资料摘要\n\n暂无摘要。主控大模型根据资料整理，当前步骤不自动生成正式规划。\n",
     )
     _write_if_missing(root / "阶段1_规划确认" / "页面规划.md", "# 页面规划\n\n待主控大模型填写 pageType、最终可见中文文字、事实保护点和每页目的。\n")
     _write_if_missing(root / "阶段1_规划确认" / "每页干净逐字稿.md", "# 每页干净逐字稿\n\n待主控大模型按页整理最终可见文字。本文档用于用户审阅每页内容，必须与 `页面规划.md` 和 `_state/阶段1/content.json` 一致。\n")
