@@ -21,6 +21,7 @@ BROAD_ACTION_RULES: dict[str, dict[str, Any]] = {
     "stage4_script": {"stages": {"stage4"}, "actor": "main_controller", "requires_locked_source": True},
     "stage4_lesson_plan": {"stages": {"stage4"}, "actor": "main_controller", "requires_locked_source": True, "requires_k12_lesson_plan": True},
     "canva_auxiliary": {"actor": "main_controller", "sidecar": True},
+    "organize_deliverables": {"sidecar": True},
 }
 STAGE3_ACTIONS = {
     "stage3_editable",
@@ -122,7 +123,7 @@ def run_drift_check(run_dir: str | Path, *, action: str | None = None, persist: 
 def _check_action(root: Path, state: dict[str, Any], action: str, issues: list[str], warnings: list[str]) -> None:
     if action in READ_ONLY_ACTIONS:
         return
-    if state.get("required_actor") == "user" and action not in DECISION_ACTIONS and action != "canva_auxiliary":
+    if state.get("required_actor") == "user" and action not in DECISION_ACTIONS and action not in {"canva_auxiliary", "organize_deliverables"}:
         issues.append(f"当前 required_actor=user，必须等待用户确认或记录用户反馈 decision，不能执行 {action}")
     broad_rule = BROAD_ACTION_RULES.get(action)
     if broad_rule is not None:
@@ -187,6 +188,8 @@ def _check_broad_action(
             warnings.append("Canva 辅助任务缺少已确认阶段1文案时，只能做有限错别字检查")
         if not confirmed.get("stage2_image_deck"):
             warnings.append("Canva 辅助任务缺少已确认阶段2图片版 PDF 时，只能参考已有视觉稿，不能视为正式锁稿")
+    if action == "organize_deliverables" and state.get("required_actor") == "user":
+        warnings.append("当前项目仍在等待用户确认；/文件整理 或 /整理 可以复制识别到且实际存在的对应文件，但整理不代表用户确认或阶段完成")
 
 
 def _check_stage3_drift(root: Path, state: dict[str, Any], action: str | None, issues: list[str], warnings: list[str]) -> None:

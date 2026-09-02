@@ -24,6 +24,7 @@
    - QA 和 doctor 分层：`references/QA与doctor规范.md`
    - 质量审查细项：`references/质量审查标准.md`
    - 阶段4演讲稿输出：`references/阶段4演讲稿输出规范.md`
+   - 文件整理交付：`references/文件整理交付规范.md`
 4. 只有用户明确要求维护 Skill 结构、文档、模板或工具时，才修改本目录。
 
 ## 防止误调用
@@ -36,6 +37,7 @@
 - 不要直接修改源 PPTX、不要直接生成可编辑 PPTX 交付、不要把通用 PPT 编辑结果包装成阶段3；除非用户明确说跳过本 Skill 流程或直接改文件。
 - 不要让代码根据文件存在、状态字段或默认规则自行进入下一阶段。
 - 不要使用 runner 式循环调度作为主控。
+- `/文件整理` 和 `/整理` 只整理当前项目目录内识别到且实际存在的对应产物，不等待用户确认；它不生成新产物、不推进阶段、不修改 `project_state.current_stage` 或确认状态。
 - 正式阶段2/阶段3图片默认先走 Codex 内置 `image_gen` 官方路线，也允许显式走 `openai_image_api` 中转 API 路线；图片记录必须有对应路线 evidence、结果 ID、图片 sha 和 batch manifest。中转 API 单个 batch/run 最多 6 并发，多个独立 batch 可同时执行；官方 `image_gen` 路线由主控按 packet 调用工具并逐张入账。
 - 正式阶段2/阶段3图片优先目标尺寸为 16:9 `2048x1152`；尽量保留生成返回原始尺寸，不主动压缩或降采样。官方 `image_gen` 若返回低于 2K，入账 `size_warnings` 作为质量风险提示，由主控按实际清晰度决定继续、重试或切路线。
 - 正式阶段3可编辑 PPT 记录必须有 provider evidence 和 tool call 证据。
