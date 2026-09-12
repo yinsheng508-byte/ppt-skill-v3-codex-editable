@@ -21,6 +21,10 @@ LEGACY_STAGE4_LESSON_PLAN_PDF_REL = "阶段4_演讲稿输出/教案设计/pdf/�
 
 _ILLEGAL_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 _WHITESPACE = re.compile(r"\s+")
+_PROJECT_CODE_PREFIX = re.compile(
+    r"^\s*((?:[A-Za-z]{1,12}[-_]?\d{1,6}|\d{1,3}|第\s*\d{1,3}\s*[课讲节]))[\s._-]+(.+?)\s*$",
+    re.IGNORECASE,
+)
 _GENERIC_COVER_TITLES = {
     "cover",
     "title",
@@ -63,9 +67,13 @@ def deliverable_topic(
     root = Path(run_dir)
     candidates: list[Any] = []
     if isinstance(script, dict):
-        candidates.extend(_script_topic_candidates(script))
+        script_candidates = _script_topic_candidates(script)
+        candidates.extend(_numbered_topic_candidates(script_candidates, state, root.name))
+        candidates.extend(script_candidates)
     content = _read_json(root / "_state" / "阶段1" / "content.json")
-    candidates.extend(_content_topic_candidates(content))
+    content_candidates = _content_topic_candidates(content)
+    candidates.extend(_numbered_topic_candidates(content_candidates, state, root.name))
+    candidates.extend(content_candidates)
     stage1_slides = _read_json(root / "_state" / "阶段1" / "slides.json")
     candidates.extend(_stage1_slide_topic_candidates(stage1_slides))
     if isinstance(state, dict):
@@ -95,6 +103,45 @@ def sanitize_deliverable_topic(value: Any) -> str:
     if len(text) > MAX_TOPIC_CHARS:
         text = text[:MAX_TOPIC_CHARS].rstrip(" ._-")
     return text
+
+
+def _numbered_topic_candidates(topics: list[Any], state: dict[str, Any] | None, root_name: str) -> list[str]:
+    code = _project_code_from_state(state, root_name)
+    if not code:
+        return []
+    candidates: list[str] = []
+    for topic_value in topics:
+        topic = sanitize_deliverable_topic(topic_value)
+        if not topic or _is_generic_topic(topic):
+            continue
+        topic_code = _project_code_from_name(topic)
+        if topic_code:
+            candidates.append(topic)
+        else:
+            candidates.append(sanitize_deliverable_topic(f"{code} {topic}"))
+    return candidates
+
+
+def _project_code_from_state(state: dict[str, Any] | None, root_name: str) -> str:
+    values: list[Any] = []
+    if isinstance(state, dict):
+        values.append(state.get("project_name"))
+    values.append(root_name)
+    for value in values:
+        code = _project_code_from_name(sanitize_deliverable_topic(value))
+        if code:
+            return code
+    return ""
+
+
+def _project_code_from_name(value: Any) -> str:
+    text = sanitize_deliverable_topic(value)
+    if not text:
+        return ""
+    match = _PROJECT_CODE_PREFIX.match(text)
+    if not match:
+        return ""
+    return sanitize_deliverable_topic(match.group(1))
 
 
 def existing_stage2_image_pdf_rel(run_dir: str | Path, state: dict[str, Any] | None = None) -> str | None:
