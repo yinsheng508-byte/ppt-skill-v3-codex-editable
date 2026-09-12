@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 K12 Lesson Plan",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_name",
+    "run_dir",
+    "created_at",
+    "basis",
+    "education_context",
+    "overview",
+    "periods"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "project_name": { "type": "string" },
+    "run_dir": { "type": "string" },
+    "created_at": { "type": "string" },
+    "basis": {
+      "type": "object",
+      "required": ["stage1_page_plan", "stage1_content", "locked_presentation_source"],
+      "properties": {
+        "stage1_page_plan": { "type": "string" },
+        "stage1_clean_transcript": { "type": "string" },
+        "stage1_content": { "type": "string" },
+        "locked_presentation_source": {
+          "type": "object",
+          "required": ["source_mode", "source_path", "source_sha256"],
+          "properties": {
+            "source_mode": {
+              "enum": ["stage2_image_deck", "external_locked_deck"]
+            },
+            "source_path": { "type": "string" },
+            "source_sha256": { "type": "string" },
+            "confirmation_basis": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "lesson_plan_context": { "type": "string" },
+        "textbook_materials": { "type": "array", "items": { "type": "object" } },
+        "curriculum_sources": { "type": "array", "items": { "type": "object" } },
+        "source_conflicts": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": true
+    },
+    "education_context": { "type": "object" },
+    "overview": {
+      "type": "object",
+      "required": [
+        "textbook_analysis",
+        "learner_analysis",
+        "core_competency_goals",
+        "key_points",
+        "difficult_points",
+        "breakthrough_strategy",
+        "teaching_methods",
+        "preparation"
+      ],
+      "properties": {
+        "textbook_analysis": { "type": "array", "items": { "type": "string" } },
+        "learner_analysis": { "type": "array", "items": { "type": "string" } },
+        "core_competency_goals": { "type": "array", "items": { "type": "string" } },
+        "key_points": { "type": "array", "items": { "type": "string" } },
+        "difficult_points": { "type": "array", "items": { "type": "string" } },
+        "breakthrough_strategy": { "type": "array", "items": { "type": "string" } },
+        "teaching_methods": { "type": "array", "items": { "type": "string" } },
+        "preparation": {
+          "type": "object",
+          "properties": {
+            "teacher": { "type": "array", "items": { "type": "string" } },
+            "student": { "type": "array", "items": { "type": "string" } },
+            "resources": { "type": "array", "items": { "type": "string" } },
+            "equipment": { "type": "array", "items": { "type": "string" } },
+            "safety_notes": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "periods": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["period_no", "period_title", "duration_minutes", "period_objectives", "process", "homework", "reflection"],
+        "properties": {
+          "period_no": { "type": "integer", "minimum": 1 },
+          "period_title": { "type": "string" },
+          "duration_minutes": { "type": "integer", "minimum": 1 },
+          "slide_range": { "type": "string" },
+          "material_scope": { "type": "array", "items": { "type": "string" } },
+          "period_objectives": { "type": "array", "items": { "type": "string" } },
+          "activity_overview": { "type": "string" },
+          "process": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["phase", "duration_minutes", "teacher_activity", "student_activity", "design_intent"],
+              "properties": {
+                "phase": { "type": "string" },
+                "duration_minutes": { "type": "integer", "minimum": 1 },
+                "ppt_slide_refs": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+                "materials_refs": { "type": "array", "items": { "type": "string" } },
+                "teacher_activity": { "type": "array", "items": { "type": "string" } },
+                "student_activity": { "type": "array", "items": { "type": "string" } },
+                "learning_task": { "type": "array", "items": { "type": "string" } },
+                "assessment_evidence": { "type": "array", "items": { "type": "string" } },
+                "design_intent": { "type": "string" },
+                "secondary_preparation_note": { "type": "string" },
+                "safety_notes": { "type": "array", "items": { "type": "string" } }
+              },
+              "additionalProperties": true
+            }
+          },
+          "homework": {
+            "type": "object",
+            "properties": {
+              "basic": { "type": "array", "items": { "type": "string" } },
+              "consolidation": { "type": "array", "items": { "type": "string" } },
+              "extension": { "type": "array", "items": { "type": "string" } },
+              "answer_key": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": true
+          },
+          "blackboard_design": { "type": "array", "items": { "type": "string" } },
+          "reflection": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": {
+              "mode": { "enum": ["pre_teaching_prompt", "post_teaching_record"] },
+              "success_observation_prompts": { "type": "array", "items": { "type": "string" } },
+              "risk_observation_prompts": { "type": "array", "items": { "type": "string" } },
+              "improvement_prompts": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "subject_extension": { "type": "object" },
+    "appendices": { "type": "object" }
+  },
+  "additionalProperties": true
+}

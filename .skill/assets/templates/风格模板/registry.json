@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "purpose": "PPT Skill v3 style template registry. Controller resolves slash shortcuts here before reading a concrete template markdown file.",
+  "templates": [
+    {
+      "id": "medical",
+      "name": "医学PPT",
+      "display_name": "医学 PPT",
+      "status": "active",
+      "template_path": "assets/templates/风格模板/医学PPT.md",
+      "triggers": ["/医学PPT"],
+      "description": "专业权威、蓝白克制、保留医学知识讲解且内容丰富但不拥挤的医学 PPT 风格模板。",
+      "route_hints": ["专业型", "课件型", "资料改造型"],
+      "style_tags": ["医学", "专业", "权威", "蓝白", "知识讲解", "内容丰富", "克制插画"],
+      "default_font_family": "Microsoft YaHei",
+      "palette_hint": {
+        "primary": "#083B7A",
+        "accent": "#2563EB",
+        "secondary_accent": "#0EA5A8",
+        "background": "#F7FAFF"
+      },
+      "usage_policy": {
+        "requires_stage_flow": true,
+        "skip_user_confirmations": false,
+        "page_number_default": false
+      }
+    }
+  ]
+}

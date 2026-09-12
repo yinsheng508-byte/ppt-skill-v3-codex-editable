@@ -1,0 +1,33 @@
+.DS_Store
+**/.DS_Store
+
+# This file is the Skill-side ignore template. Root-level generated spaces
+# are ignored through .git/info/exclude by install-profile.
+/dist/
+/tests/
+/docs/current/
+/docs/archive/
+/docs/archive/install-profile-backups/
+
+# Root-level ignore rules managed into .git/info/exclude:
+# /输入资料/*
+# /PPT输出/*
+
+# Build/cache/runtime noise.
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+dist/
+build/
+*.log
+*.tmp
+*.zip
+
+# Local secrets and environment overrides.
+.env
+.env.*
+!.env.example

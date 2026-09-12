@@ -1,0 +1,523 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 Image Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "stage",
+    "slide_index",
+    "provider",
+    "source",
+    "image_generation_route",
+    "execution_tool",
+    "generation_id",
+    "tool_call_id",
+    "image_gen_result_id",
+    "execution_group_id",
+    "prompt_hash",
+    "image_sha256",
+    "width_px",
+    "height_px",
+    "aspect_ratio",
+    "image_path",
+    "parallel_batch_path",
+    "created_at",
+    "formal_mode",
+    "fixture"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "stage": {
+      "const": "stage2"
+    },
+    "slide_index": {
+      "type": "integer"
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "image_generation_route": {
+      "enum": [
+        "codex_image_gen",
+        "openai_image_api"
+      ]
+    },
+    "execution_tool": {
+      "enum": [
+        "codex_image_gen",
+        "openai_image_api"
+      ]
+    },
+    "generation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tool_call_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "image_gen_result_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "api_call_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "image_api_result_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "api_base_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "api_endpoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "response_format": {
+      "type": "string",
+      "minLength": 1
+    },
+    "api_evidence_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "image_gen_evidence_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider_image_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "execution_group_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_hash": {
+      "type": "string",
+      "pattern": "^sha256:"
+    },
+    "image_sha256": {
+      "type": "string",
+      "pattern": "^sha256:"
+    },
+    "width_px": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height_px": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "pattern": "^[0-9]+:[0-9]+$"
+    },
+    "target_aspect_ratio": {
+      "const": "16:9"
+    },
+    "aspect_ratio_error": {
+      "type": "number",
+      "minimum": 0
+    },
+    "aspect_ratio_tolerance": {
+      "const": 0.02
+    },
+    "meets_target_aspect_ratio": {
+      "type": "boolean"
+    },
+    "target_size": {
+      "type": "object",
+      "required": [
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "preferred_minimum_size": {
+      "type": "object",
+      "required": [
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "target_size_tolerance_px": {
+      "type": "object",
+      "required": [
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "width_px": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "minimum_acceptable_size": {
+      "type": "object",
+      "required": [
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "size_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "postprocess_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "meets_preferred_size": {
+      "type": "boolean"
+    },
+    "meets_target_size": {
+      "type": "boolean"
+    },
+    "size_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "canonical_policy": {
+      "type": "string",
+      "enum": [
+        "preserve_api_raster",
+        "normalize_at_stage2"
+      ]
+    },
+    "original_api_output": {
+      "type": "object",
+      "required": [
+        "path",
+        "image_sha256",
+        "width_px",
+        "height_px",
+        "aspect_ratio"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image_sha256": {
+          "type": "string",
+          "pattern": "^sha256:"
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "pattern": "^[0-9]+:[0-9]+$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "postprocess": {
+      "type": "object",
+      "required": [
+        "type",
+        "manifest_path",
+        "method",
+        "target_size"
+      ],
+      "properties": {
+        "type": {
+          "const": "canonical_image_postprocess"
+        },
+        "manifest_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "fit_center_crop",
+            "contain_pad"
+          ]
+        },
+        "postprocess_policy": {
+          "type": "string"
+        },
+        "target_size": {
+          "type": "object",
+          "required": [
+            "width_px",
+            "height_px"
+          ],
+          "properties": {
+            "width_px": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height_px": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "purpose": {
+      "enum": [
+        "cover_option",
+        "trial_first5",
+        "full_slide"
+      ]
+    },
+    "promoted_from_trial_first5": {
+      "type": "boolean"
+    },
+    "trial_result_path": {
+      "type": "string"
+    },
+    "trial_image_path": {
+      "type": "string"
+    },
+    "promoted_from_cover_option": {
+      "type": "boolean"
+    },
+    "selected_cover_option": {
+      "type": "string"
+    },
+    "cover_option_id": {
+      "type": "string"
+    },
+    "cover_option_result_path": {
+      "type": "string"
+    },
+    "cover_option_image_path": {
+      "type": "string"
+    },
+    "option_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attempt_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "image_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parallel_batch_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "formal_mode": {
+      "type": "boolean"
+    },
+    "fixture": {
+      "type": "boolean"
+    },
+    "packet_path": {
+      "type": "string"
+    },
+    "result_path": {
+      "type": "string"
+    },
+    "generation_request_id": {
+      "type": "string"
+    },
+    "image_style_hash": {
+      "type": "string"
+    },
+    "image_style_snapshot": {
+      "type": "object"
+    },
+    "source_image_snapshot": {
+      "type": "string"
+    },
+    "prompt_document_status": {
+      "enum": [
+        "pending_repair",
+        "ready"
+      ]
+    },
+    "generation_basis": {
+      "type": "object"
+    },
+    "stale_for_current_style": {
+      "type": "boolean"
+    }
+  },
+  "dependentRequired": {
+    "target_aspect_ratio": ["aspect_ratio_error", "aspect_ratio_tolerance", "meets_target_aspect_ratio"],
+    "aspect_ratio_error": ["target_aspect_ratio", "aspect_ratio_tolerance", "meets_target_aspect_ratio"],
+    "aspect_ratio_tolerance": ["target_aspect_ratio", "aspect_ratio_error", "meets_target_aspect_ratio"],
+    "meets_target_aspect_ratio": ["target_aspect_ratio", "aspect_ratio_error", "aspect_ratio_tolerance"]
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "formal_mode": {
+            "const": true
+          },
+          "fixture": {
+            "const": false
+          }
+        },
+        "required": [
+          "formal_mode",
+          "fixture"
+        ]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "image_generation_route": {
+                "const": "codex_image_gen"
+              },
+              "provider": {
+                "const": "codex_image_gen"
+              },
+              "source": {
+                "const": "codex_image_gen"
+              },
+              "execution_tool": {
+                "const": "codex_image_gen"
+              }
+            },
+            "required": [
+              "tool_call_id",
+              "image_gen_result_id",
+              "image_gen_evidence_path"
+            ]
+          },
+          {
+            "properties": {
+              "image_generation_route": {
+                "const": "openai_image_api"
+              },
+              "provider": {
+                "const": "openai_image_api"
+              },
+              "source": {
+                "const": "openai_image_api"
+              },
+              "execution_tool": {
+                "const": "openai_image_api"
+              }
+            },
+            "required": [
+              "api_call_id",
+              "image_api_result_id",
+              "api_endpoint",
+              "model",
+              "api_evidence_path"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "image_generation_route": {
+            "const": "openai_image_api"
+          },
+          "api_endpoint": {
+            "const": "/v1/images/generations"
+          }
+        },
+        "required": [
+          "image_generation_route",
+          "api_endpoint"
+        ]
+      },
+      "then": {
+        "required": [
+          "response_format"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}

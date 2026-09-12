@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 Deck Style",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "selected_cover_option",
+    "visual_world",
+    "typography",
+    "logo_policy",
+    "page_number_policy",
+    "header_policy",
+    "content_policy",
+    "forbidden_visuals"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.3" },
+    "selected_cover_option": { "type": "string" },
+    "visual_world": { "type": "string" },
+    "style_atoms": { "type": "object" },
+    "palette": { "type": "object" },
+    "color_contract": { "type": "object" },
+    "typography": { "type": "object" },
+    "typography_contract": { "type": "object" },
+    "image_language": { "type": "object" },
+    "motif_system": { "type": "object" },
+    "logo_policy": { "type": "object" },
+    "page_number_policy": { "type": "object" },
+    "header_policy": { "type": "string" },
+    "section_policy": { "type": "string" },
+    "content_policy": { "type": "string" },
+    "forbidden_visuals": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

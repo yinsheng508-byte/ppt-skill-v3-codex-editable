@@ -1,0 +1,6 @@
+interface:
+  display_name: "PPT Skill v3"
+  short_description: "稳定调用名 ppt-skill-v3；默认阶段0到阶段4做中文PPT，/canva 或 /可画 走阶段外 Canva 辅助编辑。"
+  default_prompt: "Use $ppt-skill-v3 默认按阶段0资料整理、阶段1规划确认、阶段2图片版PDF、阶段3逐字稿与教案输出、阶段4文件整理交付完成 PPT 项目；/canva 或 /可画 只作为 Canva 辅助编辑。"
+policy:
+  allow_implicit_invocation: true

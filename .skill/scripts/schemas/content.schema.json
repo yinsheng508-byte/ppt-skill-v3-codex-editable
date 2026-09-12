@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 Content Asset",
+  "type": "object",
+  "required": ["schema_version", "deck_title", "audience", "route", "slides"],
+  "properties": {
+    "schema_version": { "const": "2.3" },
+    "deck_title": { "type": "string" },
+    "audience": { "type": "string" },
+    "route": { "type": "string" },
+    "education_context": {
+      "type": "object",
+      "properties": {
+        "is_k12": { "type": "boolean" },
+        "confidence": {
+          "type": "string",
+          "enum": ["explicit_user_request", "inferred_high", "inferred_medium", "unknown"]
+        },
+        "school_stage": {
+          "type": "string",
+          "enum": ["primary", "junior_high", "senior_high", "unknown"]
+        },
+        "grade": { "type": "string" },
+        "subject": { "type": "string" },
+        "subject_group": {
+          "type": "string",
+          "enum": ["language", "math", "foreign_language", "science", "humanities", "arts", "integrated", "unknown"]
+        },
+        "textbook_version": { "type": "string" },
+        "unit": { "type": "string" },
+        "lesson_title": { "type": "string" },
+        "lesson_number": { "type": "string" },
+        "class_type": { "type": "string" },
+        "lesson_scope": {
+          "type": "string",
+          "enum": ["single_lesson", "unit_review", "thematic_project", "unknown"]
+        },
+        "period_count": { "type": "integer", "minimum": 1 },
+        "minutes_per_period": { "type": "integer", "minimum": 1 },
+        "period_strategy": {
+          "type": "string",
+          "enum": ["explicit", "inferred_from_stage1", "inferred_from_textbook", "single_period_default", "needs_confirmation"]
+        },
+        "curriculum_standard": { "type": "string" },
+        "textbook_material_ids": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "source_summary": { "type": "string" },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["slide_index", "page_type", "title", "purpose", "final_visible_text"],
+        "properties": {
+          "slide_index": { "type": "integer" },
+          "page_type": { "type": "string" },
+          "page_role": { "type": "string" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "source_basis": { "type": "array", "items": { "type": "object" } },
+          "final_visible_text": { "type": "array", "items": { "type": "string" } },
+          "text_contract": {
+            "type": "object",
+            "properties": {
+              "must_keep": { "type": "array", "items": { "type": "string" } },
+              "can_soft_polish": { "type": "array", "items": { "type": "string" } },
+              "do_not_remove": { "type": "array", "items": { "type": "string" } },
+              "do_not_invent": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": true
+          },
+          "content_mutation_level": { "type": "string", "enum": ["preserve", "soft_polish", "restructure", "compress"] },
+          "facts_to_preserve": { "type": "array", "items": { "type": "string" } },
+          "content_blocks": { "type": "array", "items": { "type": "object" } },
+          "slide_text_required": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

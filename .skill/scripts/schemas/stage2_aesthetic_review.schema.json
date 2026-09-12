@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 Stage2 Aesthetic Review",
+  "type": "object",
+  "required": ["schema_version", "overall_status", "review_scope", "checks", "slide_findings", "rework_recommendation"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "overall_status": { "type": "string", "enum": ["pass", "needs_rework"] },
+    "review_scope": { "type": "string", "enum": ["cover_options", "trial_first5", "full_image_deck"] },
+    "checks": {
+      "type": "object",
+      "required": [
+        "visual_system_consistency",
+        "text_readability",
+        "content_text_accuracy",
+        "page_role_fit",
+        "image_relevance",
+        "no_fake_text_or_placeholders",
+        "density_and_hierarchy",
+        "page_number_policy",
+        "header_position_consistency",
+        "section_intro_consistency"
+      ],
+      "properties": {
+        "visual_system_consistency": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "text_readability": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "content_text_accuracy": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "page_role_fit": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "image_relevance": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "no_fake_text_or_placeholders": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "density_and_hierarchy": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "page_number_policy": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "header_position_consistency": { "type": "string", "enum": ["pass", "needs_rework"] },
+        "section_intro_consistency": { "type": "string", "enum": ["pass", "needs_rework"] }
+      },
+      "additionalProperties": true
+    },
+    "slide_findings": { "type": "array", "items": { "type": "object" } },
+    "rework_recommendation": {
+      "type": "object",
+      "required": ["target", "reason"],
+      "properties": {
+        "target": { "type": "string", "enum": ["stage2_design_plan", "stage2_cover", "stage2_prompt", "selected_slides", "none"] },
+        "reason": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

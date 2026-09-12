@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 Layout Intent",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "basis",
+    "global_layout",
+    "density_policy",
+    "text_layer_policy",
+    "page_type_rules"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.3" },
+    "basis": {
+      "type": "object",
+      "required": ["mode", "reason"],
+      "properties": {
+        "mode": { "type": "string" },
+        "reason": { "type": "string" },
+        "coordinate_basis": { "type": "object" }
+      }
+    },
+    "composition_grammar": { "type": "object" },
+    "global_layout": { "type": "object" },
+    "density_policy": { "type": "object" },
+    "text_layer_policy": { "type": "object" },
+    "page_type_rules": { "type": "object" },
+    "slide_role_map": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slide_index", "page_role", "layout_family"],
+        "properties": {
+          "slide_index": { "type": "integer" },
+          "page_role": { "type": "string" },
+          "layout_family": { "type": "string" },
+          "density_budget": { "type": "string" },
+          "visual_anchor": { "type": "string" },
+          "qa_focus": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "layout_slot_contracts": { "type": "object" },
+    "variation_schedule": { "type": "object" }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 Speaker Script",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_name",
+    "run_dir",
+    "talk",
+    "basis",
+    "slides",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.0" },
+    "project_name": { "type": "string" },
+    "run_dir": { "type": "string" },
+    "talk": {
+      "type": "object",
+      "required": ["title", "speaker_role"],
+      "properties": {
+        "title": { "type": "string" },
+        "speaker_role": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "basis": {
+      "type": "object",
+      "required": ["stage1_page_plan", "stage1_content", "locked_presentation_source"],
+      "properties": {
+        "stage1_page_plan": { "type": "string" },
+        "stage1_clean_transcript": { "type": "string" },
+        "stage1_content": { "type": "string" },
+        "locked_presentation_source": {
+          "type": "object",
+          "required": ["source_mode", "source_path", "source_sha256"],
+          "properties": {
+            "source_mode": {
+              "enum": ["stage2_image_deck", "external_locked_deck"]
+            },
+            "source_path": { "type": "string" },
+            "source_sha256": { "type": "string" },
+            "confirmation_basis": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "slide_index",
+          "slide_title",
+          "script"
+        ],
+        "properties": {
+          "slide_index": { "type": "integer", "minimum": 1 },
+          "slide_title": { "type": "string" },
+          "script": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "created_at": { "type": "string" }
+  },
+  "additionalProperties": true
+}

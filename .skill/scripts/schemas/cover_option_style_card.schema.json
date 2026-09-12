@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Skill v3 Cover Option Style Card",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "option_id",
+    "basis_design_contract",
+    "style_positioning",
+    "best_for",
+    "composition",
+    "visual_medium",
+    "palette_strategy",
+    "typography_direction",
+    "layout_extension",
+    "risk_notes",
+    "prompt_constraints",
+    "selection_explanation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "option_id": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "basis_design_contract": {
+      "type": "string"
+    },
+    "style_positioning": {
+      "type": "string"
+    },
+    "best_for": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "composition": {
+      "type": "string"
+    },
+    "visual_medium": {
+      "type": "string"
+    },
+    "palette_strategy": {
+      "type": "string"
+    },
+    "typography_direction": {
+      "type": "string"
+    },
+    "layout_extension": {
+      "type": "object",
+      "required": [
+        "cover_to_inner_pages",
+        "suitable_page_roles",
+        "risky_page_roles"
+      ],
+      "properties": {
+        "cover_to_inner_pages": {
+          "type": "string"
+        },
+        "suitable_page_roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risky_page_roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "risk_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prompt_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "selection_explanation": {
+      "type": "string"
+    },
+    "image_prompt_plan": {
+      "type": "object",
+      "required": [
+        "version",
+        "basis_hash",
+        "visual",
+        "style",
+        "layout",
+        "constraints",
+        "text_roles"
+      ],
+      "properties": {
+        "version": {
+          "const": "1"
+        },
+        "basis_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "visual": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "style": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "layout": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "text_roles": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "subtitle": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "module_index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "module_title": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "module_subtitle": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "page_number": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}
