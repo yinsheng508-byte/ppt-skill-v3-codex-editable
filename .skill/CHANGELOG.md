@@ -4,6 +4,25 @@
 
 历史条目只记录当时版本事实。若旧条目与最新版本口径冲突，以最高版本条目、`.skill/SKILL.md` 和正式 references 为准。
 
+## 1.0.5 - 2026-09-12
+
+本次是 GitHub 发布后的维护入口精简：去掉重复维护文档，只保留一个用户和维护者都能看懂的维护说明。
+
+调整：
+
+- 将 `docs/维护规划.md` 的发布边界、GitHub 上传边界和维护原则合并进 `docs/维护说明.md`。
+- 删除 `docs/维护规划.md`，正式包只保留 `docs/维护说明.md` 一个维护入口。
+- 打包白名单改为只允许 `docs/维护说明.md` 进入包，继续排除测试、过程文档、归档文档、输入输出和 dist 产物。
+
+验收：
+
+- `python3 .skill/scripts/pptctl.py inspect-installation`
+- `python3 .skill/scripts/pptctl.py validate-style-templates`
+- `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
+- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
+- `python3 .skill/scripts/package_skill.py --output-dir .skill/dist`
+
 ## 1.0.4 - 2026-09-12
 
 本次是 GitHub 同步前的发布打包收口，重点处理普通用户包的边界和维护入口。

@@ -39,7 +39,7 @@ EXCLUDED_FILE_NAMES = {".DS_Store"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log", ".tmp", ".zip"}
 FORBIDDEN_PARTS = {"src", "node_modules", "outputs", "inputs", "PPT输出", "输入资料", "tests", "__pycache__"}
 EXCLUDED_NAME_FRAGMENTS = {"任务卡", "验收记录", "改造规划", "改造需求", "dev_smoke"}
-INCLUDED_DOC_REL_PATHS = {"docs/维护说明.md", "docs/维护规划.md"}
+INCLUDED_DOC_REL_PATHS = {"docs/维护说明.md"}
 EXCLUDED_REL_PATHS: set[str] = set()
 
 
