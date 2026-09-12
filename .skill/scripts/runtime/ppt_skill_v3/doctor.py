@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from .deliverable_naming import (
 from .json_io import read_json
 from .paths import decisions_dir, existing_decision_path, legacy_decisions_dir
 from .image_geometry import read_image_dimensions, review_image_aspect_ratio
+from .image_prompt_plan import validate_packet_prompt
 from .image_style import result_is_current
 from .stage1_plan import load_stage1_slides
 from .stage2_trial import stage2_trial_first5_results_complete
@@ -139,6 +141,8 @@ def _check_stage1_stage2_consistency(root: Path, issues: list[str], warnings: li
             warnings.append("阶段2尚未生成用户可读的 图片生成提示词.md")
         else:
             _check_prompt_document_links(root, prompt_doc, issues, warnings)
+            _check_prompt_document_pollution(prompt_doc, warnings)
+        _check_pending_stage2_prompts(root, state, issues, warnings)
     if _should_check_stage2_current_image_results(state):
         _check_stage2_current_image_results(
             root,
@@ -221,6 +225,85 @@ def _check_prompt_document_links(root: Path, prompt_doc: Path, issues: list[str]
             issues.append(f"图片生成提示词.md 不应直接依赖内部 _state 链接：{target}")
         if not resolved.exists():
             issues.append(f"图片生成提示词.md 存在坏链接：{target}")
+
+
+def _check_prompt_document_pollution(prompt_doc: Path, warnings: list[str]) -> None:
+    text = prompt_doc.read_text(encoding="utf-8")
+    fragments = _prompt_pollution_fragments(text)
+    if fragments:
+        warnings.append(
+            "图片生成提示词.md 含旧提示词污染痕迹；成功历史按实际提交prompt保留，后续新请求必须重新编译："
+            + "、".join(fragments[:4])
+        )
+
+
+def _check_pending_stage2_prompts(root: Path, state: dict[str, Any], issues: list[str], warnings: list[str]) -> None:
+    planned_rework = _planned_stage2_rework_slides(root, state)
+    packet_dirs = (
+        root / "_state" / "阶段2" / "packets",
+        root / "_state" / "阶段2" / "cover_options" / "packets",
+        root / "_state" / "阶段2" / "trial_first5" / "packets",
+    )
+    for packet_dir in packet_dirs:
+        if not packet_dir.exists():
+            continue
+        for packet_path in sorted(packet_dir.glob("*.json")):
+            try:
+                packet = read_json(packet_path)
+            except Exception as exc:
+                issues.append(f"阶段2待发提示词无法读取：{packet_path.relative_to(root)}：{exc}")
+                continue
+            prompt = packet.get("prompt")
+            slide_index = packet.get("slide_index")
+            stale_rework_packet = isinstance(slide_index, int) and slide_index in planned_rework
+            if isinstance(prompt, str):
+                fragments = _prompt_pollution_fragments(prompt)
+                if fragments:
+                    message = f"阶段2待发提示词污染：{packet_path.relative_to(root)}：" + "、".join(fragments[:4])
+                    if stale_rework_packet:
+                        warnings.append(message + "；该页已纳入返工范围，重新派发时必须清理。")
+                    else:
+                        issues.append(message)
+                    continue
+            try:
+                validate_packet_prompt(root, packet)
+            except Exception as exc:
+                message = f"阶段2待发提示词不是当前有效prompt：{packet_path.relative_to(root)}：{exc}"
+                if stale_rework_packet:
+                    warnings.append(message + "；该页已纳入返工范围，重新派发后再验收。")
+                else:
+                    issues.append(message)
+
+
+def _planned_stage2_rework_slides(root: Path, state: dict[str, Any]) -> set[int]:
+    if not (
+        state.get("current_stage") == "stage2"
+        and state.get("required_actor") == "main_controller"
+        and state.get("status") in {"revision_requested", "trial_first5_revision_requested"}
+        and not state.get("confirmed", {}).get("stage2_image_deck")
+    ):
+        return set()
+    decision_path = existing_decision_path(root, str(state.get("last_decision_id", "")))
+    if not decision_path.is_file():
+        return set()
+    try:
+        decision = read_json(decision_path)
+    except Exception:
+        return set()
+    if decision.get("decision_type") not in {"request_stage2_revision", "request_stage2_trial_first5_revision"}:
+        return set()
+    return {index for index in decision.get("execution", {}).get("slide_indices", []) if isinstance(index, int)}
+
+
+def _prompt_pollution_fragments(text: str) -> list[str]:
+    checks: list[tuple[str, str]] = [
+        ("Markdown适用页面", r"\*\*\s*适用页面\s*\*\*"),
+        ("文档内部引用", r"详见|见「|见《"),
+        ("内部路径或状态", r"_state(?:/|\\)|sha256:|待生成|待重试|生成失败"),
+        ("跨页映射", r"(?:[Pp]\s*\d+|第\s*\d+\s*页).*(?:[、,/]|[-–—~至到]).*(?:[Pp]?\s*\d+|第\s*\d+\s*页)"),
+        ("未启用章节标签", r"章节标签|chapter_tag|section_label|eyebrow"),
+    ]
+    return [label for label, pattern in checks if re.search(pattern, text)]
 
 
 def _should_check_stage2_current_image_results(state: dict[str, Any]) -> bool:

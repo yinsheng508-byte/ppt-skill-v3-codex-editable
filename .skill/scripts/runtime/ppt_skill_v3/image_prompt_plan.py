@@ -13,6 +13,16 @@ from pathlib import Path
 from typing import Any
 
 from .json_io import read_json, write_json
+from .prompt_rule_utils import (
+    clean_rule_text,
+    filter_rule_lines,
+    is_document_meta_rule,
+    is_optional_label_rule,
+    is_unbound_label_region,
+    rule_semantic_key,
+    strip_list_marker,
+    unique_rules,
+)
 from .validation import ValidationError
 
 PROMPT_FORMAT_VERSION = '2'
@@ -73,19 +83,11 @@ def page_role(content: dict, brief: dict, layout: dict | None = None) -> str:
 
 
 def _lines(value: str) -> list[str]:
-    return [re.sub(r'^\s*(?:[-*+]\s+|\d+[.)、]\s*)', '', x).strip() for x in value.splitlines() if x.strip()]
+    return [strip_list_marker(x) for x in value.splitlines() if x.strip()]
 
 
 def unique(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result = []
-    for item in items:
-        item = re.sub(r'\s+', ' ', item).strip()
-        key = item.rstrip('。；; ')
-        if key and key not in seen:
-            seen.add(key)
-            result.append(item)
-    return result
+    return unique_rules(items)
 
 
 def check_instruction(text: str, *, label: str = '画面规则', allow_page_number: bool = False) -> None:
@@ -93,6 +95,14 @@ def check_instruction(text: str, *, label: str = '画面规则', allow_page_numb
         raise ValidationError(f'{label}混入输出尺寸/分辨率指令，请在请求参数中设置')
     if _INTERNAL.search(text) or _TOKEN.search(text):
         raise ValidationError(f'{label}混入内部说明或未解析变量，请主控整理')
+    if '**' in text or re.search(r'[`*_]{2,}', text):
+        raise ValidationError(f'{label}混入Markdown标记，请主控整理')
+    if is_document_meta_rule(text) or '详见' in text:
+        raise ValidationError(f'{label}混入文档说明或内部引用，请主控整理')
+    if is_optional_label_rule(text):
+        raise ValidationError(f'{label}混入未启用的章节标签规则，请主控整理')
+    if re.search(r'(?:[Pp]\s*\d+|第\s*\d+\s*页).*(?:[、,/]|[-–—~至到]).*(?:[Pp]?\s*\d+|第\s*\d+\s*页)', text):
+        raise ValidationError(f'{label}混入跨页映射，请主控整理为当前页规则')
     if not allow_page_number and '页码' in text and not _is_page_number_constraint(text):
         raise ValidationError(f'{label}不应另写页码规则，请使用page_number_policy')
 
@@ -167,7 +177,7 @@ def load_prompt_sources(run_dir: str | Path, slide_index: int, *, option_id: str
         'visible': content['final_visible_text'],
         'ppt_consistency': {
             k: consistency.get(k)
-            for k in ('document_path', 'document_hash', 'layout_rules', 'constraints', 'page_number_rules', 'exception_rules')
+            for k in ('document_path', 'hash', 'layout_rules', 'constraints', 'page_number_rules', 'exception_rules', 'title_component_rules', 'module_component_rules', 'common_element_rules')
         },
         'style': {k: style.get(k, '') for k in ('common', 'forbidden', 'type_rule', 'page_rule')},
         'brief': {k: brief.get(k) for k in ('visual_composition', 'main_visual_elements', 'style_constraints', 'negative_constraints', 'density_budget')},
@@ -208,12 +218,17 @@ def layout_components(sources: dict, roles: dict[str, int]) -> list[str]:
             return names[key]
         result.append(_TOKEN.sub(replace, shared['prompt_block']))
     elif sources.get('header_policy'):
-        result.append(sources['header_policy'])
+        header = clean_rule_text(sources['header_policy'])
+        if header and not is_document_meta_rule(header) and not is_optional_label_rule(header):
+            result.append(header)
     safety = sources.get('safety') or {}
+    bound_roles = set(roles)
     for key, kind in [('text_safe_regions', '文字区域'), ('visual_regions', '图解区域')]:
         regions = safety.get(key) or (safety.get('editable_text_regions') if key == 'text_safe_regions' else []) or []
         for region in regions:
             if isinstance(region, dict):
+                if key == 'text_safe_regions' and is_unbound_label_region(region, bound_roles):
+                    continue
                 rule = _box_instruction(region, kind)
                 if rule:
                     result.append(rule)
@@ -241,7 +256,8 @@ def prepare_plan(run_dir: str | Path, slide_index: int, draft: dict, *, option_i
     plan['layout'] += layout_components(context['sources'], plan['text_roles'])
     consistency = context['sources'].get('ppt_consistency') or {}
     plan['layout'] += consistency.get('layout_rules') or []
-    plan['constraints'] += (consistency.get('constraints') or []) + _lines(context['sources']['style']['forbidden'])
+    style_forbidden = filter_rule_lines(_lines(context['sources']['style']['forbidden']), drop_optional_labels=False)
+    plan['constraints'] += (consistency.get('constraints') or []) + style_forbidden
     for field in PLAN_FIELDS:
         plan[field] = unique(plan[field])
     validate_image_prompt_plan(plan, context['sources']['visible'])
@@ -269,15 +285,16 @@ def current_plan(run_dir: str | Path, slide_index: int, *, option_id: str | None
     if plan['basis_hash'] != context['basis_hash']:
         raise ValidationError(f'第{slide_index}页画面计划来源已变化，请主控重新整理并派发')
     consistency = context['sources'].get('ppt_consistency') or {}
+    style_forbidden = filter_rule_lines(_lines(context['sources']['style']['forbidden']), drop_optional_labels=False)
     expected = (
-        _lines(context['sources']['style']['forbidden'])
+        style_forbidden
         + (consistency.get('layout_rules') or [])
         + (consistency.get('constraints') or [])
         + layout_components(context['sources'], plan['text_roles'])
     )
-    present = {x.rstrip('。；; ') for f in PLAN_FIELDS for x in plan[f]}
+    present = {rule_semantic_key(x) for f in PLAN_FIELDS for x in plan[f]}
     for rule in unique(expected):
-        if rule.rstrip('。；; ') not in present:
+        if rule_semantic_key(rule) not in present:
             raise ValidationError(f'第{slide_index}页画面计划遗漏当前限制或页面组件：' + rule)
     return plan, context['sources']
 

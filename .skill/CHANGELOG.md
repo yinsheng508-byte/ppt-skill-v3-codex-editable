@@ -4,6 +4,30 @@
 
 历史条目只记录当时版本事实。若旧条目与最新版本口径冲突，以最高版本条目、`.skill/SKILL.md` 和正式 references 为准。
 
+## 1.0.6 - 2026-09-13
+
+本次完成阶段2提示词按页编译与普通页标题改造：解决 `PPT一致性.md` 整章注入、普通页默认带章节标签、跨页映射进入 prompt、Markdown 残留和重复禁用项稀释本页重点的问题。
+
+调整：
+
+- 普通内容页默认只使用页面标题组件，不自动生成章节标签、眉题或模块导航条。
+- `PPT一致性.md` 解析改为按页过滤：普通页、模块页、封面、目录、结束页和页码范围例外只返回当前页有效规则。
+- 新增提示词规则清洗工具，统一处理 Markdown 标记、文档说明、跨页映射、未启用章节标签、未绑定 `chapter_tag` 安全区和同义禁用项归并。
+- `image_prompt_plan` 只注入当前页有效规则；`current_plan` 改为语义类别覆盖校验，不再要求一致性原文逐条存在。
+- final prompt 跨字段使用语义 key 去重，避免照片/3D、未批准文字、温暖积极等要求重复输出。
+- doctor 增加新待发 prompt 污染检查；旧成功提示词文档仅 warning，不自动改写历史证据。
+- 正式规范和阶段1模板同步：章节标签必须显式 opt-in；没有章节标签不再被 QA 误判为缺失。
+
+验收：
+
+- `python3 .skill/scripts/pptctl.py inspect-installation`
+- `python3 .skill/scripts/pptctl.py validate-style-templates`
+- `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
+- `python3 -m compileall -q .skill/scripts/runtime/ppt_skill_v3`
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
+- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `python3 .skill/scripts/package_skill.py --output-dir .skill/dist`
+
 ## 1.0.5 - 2026-09-12
 
 本次是 GitHub 发布后的维护入口精简：去掉重复维护文档，只保留一个用户和维护者都能看懂的维护说明。

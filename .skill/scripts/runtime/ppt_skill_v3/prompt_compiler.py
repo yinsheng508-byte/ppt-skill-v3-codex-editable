@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .image_prompt_plan import check_instruction, unique, validate_image_prompt_plan
+from .prompt_rule_utils import rule_semantic_key
 from .validation import ValidationError
 
 
@@ -58,7 +59,7 @@ def render_image_prompt(visible: list[str], plan: dict, page_number_policy: dict
     for field, label in [('visual', '构图'), ('style', '图片风格'), ('layout', '文字与布局'), ('constraints', '画面限制')]:
         items = []
         for rule in unique(plan[field]):
-            key = rule.rstrip('。；; ')
+            key = rule_semantic_key(rule)
             if key not in emitted:
                 emitted.add(key)
                 items.append(rule)
