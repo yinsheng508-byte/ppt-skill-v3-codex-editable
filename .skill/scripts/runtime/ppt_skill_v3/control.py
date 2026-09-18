@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
+from .canva_task import CANVA_TASKS_REL
 from .deliverable_naming import existing_stage3_lesson_plan_output_rel, existing_stage3_output_rel
 from .doctor import check_project
 from .image_style import result_is_current, style_document_path
@@ -20,7 +22,7 @@ from .validation import (
 from .ppt_consistency import CONSISTENCY_RELPATH
 
 
-def build_next_action(run_dir: str | Path, *, persist: bool = True) -> dict[str, Any]:
+def build_next_action(run_dir: str | Path, *, persist: bool = False) -> dict[str, Any]:
     root = Path(run_dir)
     state = read_state(root)
     action = {
@@ -43,7 +45,7 @@ def build_next_action(run_dir: str | Path, *, persist: bool = True) -> dict[str,
     return action
 
 
-def build_resume_brief(run_dir: str | Path, *, persist: bool = True) -> dict[str, Any]:
+def build_resume_brief(run_dir: str | Path, *, persist: bool = False) -> dict[str, Any]:
     root = Path(run_dir)
     state = read_state(root)
     doctor = check_project(root)
@@ -69,6 +71,7 @@ def build_resume_brief(run_dir: str | Path, *, persist: bool = True) -> dict[str
             ),
         },
         "image_style_status": _image_style_status(root, state),
+        "canva_auxiliary_tasks": _canva_auxiliary_tasks(root),
         "doctor": {
             "ok": doctor["ok"],
             "issues_count": len(doctor.get("issues", [])),
@@ -89,6 +92,7 @@ def render_resume_brief_markdown(brief: dict[str, Any]) -> str:
     next_action = brief.get("next_action") if isinstance(brief.get("next_action"), dict) else {}
     doctor = brief.get("doctor") if isinstance(brief.get("doctor"), dict) else {}
     image_style = brief.get("image_style_status") if isinstance(brief.get("image_style_status"), dict) else {}
+    canva_tasks = brief.get("canva_auxiliary_tasks") if isinstance(brief.get("canva_auxiliary_tasks"), list) else []
     last_decision = brief.get("last_decision") if isinstance(brief.get("last_decision"), dict) else None
     lines = [
         "# 恢复摘要",
@@ -125,6 +129,25 @@ def render_resume_brief_markdown(brief: dict[str, Any]) -> str:
                 f"- 提示词文档：{image_style.get('prompt_document')}",
             ]
         )
+    lines.extend(
+        [
+            "",
+            "## 阶段外 Canva 辅助任务",
+            "",
+        ]
+    )
+    if canva_tasks:
+        for task in canva_tasks:
+            if not isinstance(task, dict):
+                continue
+            last_batch = task.get("last_batch_transaction_status") or "暂无"
+            lines.append(
+                "- "
+                + f"{task.get('task_id')}：{task.get('status')}；执行器={task.get('executor')}；"
+                + f"最近批次={last_batch}；路径={task.get('path')}"
+            )
+    else:
+        lines.append("- 暂无")
     lines.extend(
         [
             "",
@@ -347,7 +370,10 @@ def _active_work_packet(root: Path) -> dict[str, Any] | None:
         packet = read_json(path)
     except Exception as exc:  # pragma: no cover
         return {"path": _relative(root, path), "status": "unreadable", "error": str(exc)}
+    if isinstance(packet, dict) and isinstance(packet.get("packet_path"), str):
+        return {"path": _relative(root, path), **packet}
     if isinstance(packet, dict):
+        # Legacy full active packets remain readable without being rewritten.
         return {"path": _relative(root, path), **packet}
     return {"path": _relative(root, path), "status": "invalid"}
 
@@ -411,6 +437,86 @@ def _image_style_status(root: Path, state: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             result["stale_results"].append(_relative(root, path))
     return result
+
+
+def _canva_auxiliary_tasks(root: Path) -> list[dict[str, Any]]:
+    """Summarize stage-external Canva sidecars without driving any project transition."""
+
+    tasks_root = root / CANVA_TASKS_REL
+    if not tasks_root.is_dir():
+        return []
+    summaries: list[dict[str, Any]] = []
+    for task_dir in sorted(path for path in tasks_root.iterdir() if path.is_dir()):
+        task_path = task_dir / "task.json"
+        summary: dict[str, Any] = {
+            "task_id": task_dir.name,
+            "path": _relative(root, task_dir),
+            "status": "missing_task_json",
+            "provider": "unknown",
+            "host_profile": "unknown",
+            "executor": "legacy_plugin_inferred",
+            "last_batch_transaction_status": _last_canva_batch_transaction_status(task_dir),
+            "manual_todo_count": _manual_todo_count(task_dir / "manual_todos.md"),
+        }
+        if not task_path.exists():
+            summaries.append(summary)
+            continue
+        try:
+            task = read_json(task_path)
+        except Exception:
+            summary["status"] = "unreadable_task_json"
+            summaries.append(summary)
+            continue
+        if not isinstance(task, dict):
+            summary["status"] = "invalid_task_json"
+            summaries.append(summary)
+            continue
+        task_id = task.get("task_id")
+        if isinstance(task_id, str) and task_id.strip():
+            summary["task_id"] = task_id
+        provider = task.get("provider")
+        if isinstance(provider, str) and provider.strip():
+            summary["provider"] = provider
+        host_profile = task.get("host_profile")
+        if isinstance(host_profile, str) and host_profile.strip():
+            summary["host_profile"] = host_profile
+        executor = task.get("executor")
+        if isinstance(executor, str) and executor.strip():
+            summary["executor"] = executor
+        status = task.get("status")
+        if isinstance(status, str) and status.strip():
+            summary["status"] = status
+        summaries.append(summary)
+    return summaries
+
+
+def _last_canva_batch_transaction_status(task_dir: Path) -> str | None:
+    log_path = task_dir / "batch_edit_log.jsonl"
+    if not log_path.exists():
+        return None
+    try:
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return "unreadable"
+    for line in reversed(lines):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(record, dict) or record.get("event_type") != "batch_edit":
+            continue
+        transaction_status = record.get("transaction_status")
+        if transaction_status in {"draft", "committed", "cancelled", "failed"}:
+            return transaction_status
+        return "invalid"
+    return None
+
+
+def _manual_todo_count(path: Path) -> int:
+    try:
+        return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.lstrip().startswith("- "))
+    except OSError:
+        return 0
 
 
 def _control_artifacts(state: dict[str, Any]) -> dict[str, str]:

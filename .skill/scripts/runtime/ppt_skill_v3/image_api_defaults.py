@@ -7,7 +7,7 @@ from .image_routes import DEFAULT_PPT_IMAGE_SIZE_16_9
 
 IMAGE_API_PROVIDER = "openai_image_api"
 
-DEFAULT_IMAGE_API_BASE_URL = "http://direct-api.cangyuansuanli.cn/"
+DEFAULT_IMAGE_API_BASE_URL = "https://eb.grsaiapi.com/"
 DEFAULT_IMAGE_API_GENERATION_ENDPOINT = "/v1/images/generations"
 DEFAULT_IMAGE_API_EDITS_ENDPOINT = "/v1/images/edits"
 LEGACY_GRSAI_DRAW_COMPLETIONS_ENDPOINT = "/v1/draw/completions"

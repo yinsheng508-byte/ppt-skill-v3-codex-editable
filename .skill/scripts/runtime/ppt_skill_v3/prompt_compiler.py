@@ -46,26 +46,37 @@ def render_image_prompt(visible: list[str], plan: dict, page_number_policy: dict
     if not isinstance(visible, list) or not visible or not all(isinstance(x, str) and x.strip() for x in visible):
         raise ValidationError('正式生图必须有完整的批准页面文字')
     validate_image_prompt_plan(plan, visible)
-    rows = ['生成一张横版中文PPT' + ('封面。' if cover else '图片。'), '', '画面文字，按段完整呈现：', '\n\n'.join(visible)]
+    rows = ['生成一张横版中文PPT课件' + ('封面。' if cover else '页。'), '', '【画面文字】', '\n\n'.join(visible)]
     role_names = {'title': '标题', 'subtitle': '副标题', 'module_index': '章节编号', 'module_title': '章节标题', 'module_subtitle': '章节说明', 'page_number': '页码文字'}
     role_instructions = []
     for index, text in enumerate(visible):
         labels = [name for role, name in role_names.items() if plan['text_roles'].get(role) == index]
         if labels:
             role_instructions.append(f'第{index + 1}段作为' + '、'.join(labels))
-    if role_instructions:
-        rows += ['', '排版要求：' + '，'.join(role_instructions) + '；这些用途名称不出现在画面中。']
     emitted: set[str] = set()
-    for field, label in [('visual', '构图'), ('style', '图片风格'), ('layout', '文字与布局'), ('constraints', '画面限制')]:
-        items = []
-        for rule in unique(plan[field]):
+    def resolved(items: list[str]) -> list[str]:
+        result = []
+        for rule in items:
             key = rule_semantic_key(rule)
             if key not in emitted:
                 emitted.add(key)
-                items.append(rule)
-        if items:
-            rows += ['', label + '：' + '；'.join(x.rstrip('。；; ') for x in items) + '。']
-    rows += ['', _page_number(page_number_policy, visible, plan, slide_index), '仅呈现指定文字' + ('和页码。' if page_number_policy.get('enabled') is True or page_number_policy.get('visible') is True else '。')]
+                result.append(rule)
+        return result
+
+    page_design = []
+    if role_instructions:
+        page_design.append('，'.join(role_instructions) + '，这些用途名称不出现在画面中')
+    page_design.extend(resolved(unique(plan['layout'])))
+    page_design.extend(resolved(unique(plan['visual'])))
+    page_design.extend(resolved([_page_number(page_number_policy, visible, plan, slide_index)]))
+    rows += ['', '【页面设计】', '；'.join(x.rstrip('。；; ') for x in page_design) + '。']
+
+    visual_style = resolved(unique(plan['style']))
+    rows += ['', '【视觉风格】', '；'.join(x.rstrip('。；; ') for x in visual_style) + '。']
+
+    constraints = resolved(unique(plan['constraints']))
+    constraints.append('仅显示给定文字' + ('和已说明的页码，不添加其他文字' if page_number_policy.get('enabled') is True or page_number_policy.get('visible') is True else '，不添加其他文字'))
+    rows += ['', '【关键约束】', '；'.join(x.rstrip('。；; ') for x in constraints) + '。']
     return '\n'.join(rows)
 
 

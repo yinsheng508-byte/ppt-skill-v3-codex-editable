@@ -39,7 +39,9 @@ def create_work_packet(
     active = _read_active_packet(root)
     if active and active.get("status") == "active":
         raise ValidationError(f"active work packet already exists: {active.get('packet_id')}")
-    drift = run_drift_check(root, action=action, persist=True)
+    # A work packet records the guard result inside its own immutable archive;
+    # creating it must not also manufacture a standalone drift snapshot.
+    drift = run_drift_check(root, action=action, persist=False)
     if not drift["ok"]:
         raise ValidationError(f"drift-check failed before creating work packet: {'; '.join(drift['issues'])}")
     artifacts = _input_artifacts_for_stage(stage, input_artifacts or [])
@@ -63,7 +65,9 @@ def create_work_packet(
             "decision_type": confirmation_decision_type,
         },
         "drift_guards": {
-            "drift_check_path": "_state/control/drift_check.json",
+            "computed": True,
+            "action": action,
+            "check_mode": drift.get("doctor", {}).get("mode"),
             "issues": drift.get("issues", []),
             "warnings": drift.get("warnings", []),
         },
@@ -72,7 +76,7 @@ def create_work_packet(
     }
     packet = validate_work_packet(packet)
     _write_packet(root, packet)
-    write_json(control_dir(root) / "active_work_packet.json", packet)
+    _write_active_pointer(root, packet)
     append_event(root, "work_packet_created", "runtime", packet_id=packet["packet_id"], action=action, stage=stage)
     return packet
 
@@ -92,7 +96,7 @@ def close_work_packet(run_dir: str | Path, packet_id: str, *, status: str, summa
     packet["updated_at"] = now_iso()
     packet = validate_work_packet(packet)
     _write_packet(root, packet)
-    write_json(control_dir(root) / "active_work_packet.json", packet)
+    _write_active_pointer(root, packet)
     append_event(root, "work_packet_closed", "runtime", packet_id=packet["packet_id"], status=status)
     return packet
 
@@ -153,7 +157,13 @@ def _read_active_packet(root: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     value = read_json(path)
-    return value if isinstance(value, dict) else None
+    if not isinstance(value, dict):
+        return None
+    # New projects keep only this light pointer in the activity slot.  Older
+    # projects stored the complete packet here; retain read compatibility.
+    if isinstance(value.get("packet_path"), str) and value.get("schema_version") == "1.0":
+        return value
+    return value
 
 
 def _load_packet(root: Path, packet_id: str) -> dict[str, Any]:
@@ -167,6 +177,22 @@ def _write_packet(root: Path, packet: dict[str, Any]) -> Path:
     path = control_dir(root) / "work_packets" / f"{packet['packet_id']}.json"
     write_json(path, packet)
     return path
+
+
+def _write_active_pointer(root: Path, packet: dict[str, Any]) -> Path:
+    archive_path = control_dir(root) / "work_packets" / f"{packet['packet_id']}.json"
+    pointer = {
+        "schema_version": "1.0",
+        "packet_id": packet["packet_id"],
+        "packet_path": archive_path.relative_to(root).as_posix(),
+        "stage": packet["stage"],
+        "action": packet["action"],
+        "status": packet["status"],
+        "created_at": packet["created_at"],
+        "updated_at": packet["updated_at"],
+    }
+    write_json(control_dir(root) / "active_work_packet.json", pointer)
+    return archive_path
 
 
 def _next_packet_id(root: Path, stage: str, action: str) -> str:

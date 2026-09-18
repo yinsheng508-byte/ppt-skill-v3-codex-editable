@@ -17,7 +17,7 @@ description: "中文 AI PPT 主控 Skill。用于新建、改造、美化、审�
 ## 路线判断
 
 - 默认：具体 PPT 项目走阶段0到阶段4。
-- `/canva`、`/可画`：走 Canva 辅助编辑，不算阶段3。
+- `/canva`、`/可画`：都表示国际版 Canva 的阶段外辅助编辑，不算阶段3；WorkBuddy 首选 Canva MCP，Codex 首选 Canva 插件，实际执行前必须按宿主和当前工具可用性选择执行器。
 - 阶段4整理交付是阶段3完成后的内部整理动作；用户明确要求整理最终交付物时，先恢复项目事实，再由主控判断是否进入阶段4整理。
 - 项目正在等待用户确认时，如果用户明确要求执行下一阶段任务，主控可视为用户已确认当前待确认产物；仍需写入对应 approval decision，并在 notes 记录用户原话。
 - 用户明确说直接改文件、跳过阶段流程或不走 Skill：才跳过阶段0到阶段4流程。
@@ -29,7 +29,7 @@ description: "中文 AI PPT 主控 Skill。用于新建、改造、美化、审�
 - 用户只给已有 PPTX，并说“内容不变 / 内容不要大改 / 优化视觉 / 美化 / 升级 / 先做一版”，也视为具体 PPT 项目。
 - 除非用户明确说“跳过 Skill 流程 / 不走阶段0到阶段4流程 / 直接改源 PPTX / 直接用通用工具改文件”，不要直接修改源 PPTX 或直接交付阶段产物。
 - `/医学PPT` 等风格模板入口只确定风格上下文，不跳过阶段1、阶段2封面候选或用户确认点。
-- `/canva`、`/可画` 是阶段外 Canva 辅助编辑任务：优先把 PPT/PDF 导入 Canva，让用户手动完成 Magic Layers，用户回传 Canva 链接后再用 Canva 插件批量修正文案和样式。兼容旧别名 `/canva编辑`、`/可画编辑`、`/可画AI编辑`，但不再默认走浏览器自动点击 AI 图层。
+- `/canva`、`/可画` 是国际版 Canva 阶段外辅助编辑任务：先探测执行器，WorkBuddy 的可编辑操作必须走 `mcp__canva__*`，Codex 保持 Canva 插件路线；两者都让用户手动完成 Magic Layers，再由 AI 主控逐页理解页面角色、以阶段1 `content.json.final_visible_text` 校验文案、按阶段2视觉参考判断并修正支持范围内的文字样式。默认 5 页一批，AI 回读每页文字与预览通过后直接 commit，不等待用户逐批主动确认。兼容旧别名 `/canva编辑`、`/可画编辑`、`/可画AI编辑`，但不再默认走浏览器自动点击 AI 图层。
 - Canva 辅助编辑任务可读取阶段1逐字稿和阶段2图片版 PPT/PDF 作为参考，但不属于阶段3，不自动进入或替代阶段3逐字稿/教案输出，也不写阶段3完成决策。
 
 ## 恢复第一步
@@ -39,7 +39,7 @@ description: "中文 AI PPT 主控 Skill。用于新建、改造、美化、审�
 - 用户给了项目路径：读取该项目 `_state/project_state.json`、`_state/decisions/`、`_state/events.jsonl` 和当前阶段目录。
 - 用户只说继续、修改、确认、看进度或只给源 PPTX：先在 `PPT输出/` 下找同名或近似项目。
 - 找不到项目时，再建立新的 `PPT输出/<中文项目名>/` 并把源资料登记到阶段0。
-- 定位项目后，优先运行 `python3 .skill/scripts/pptctl.py resume-brief --run-dir <项目目录>` 或读取 `_state/control/resume_brief.md`。
+- 定位项目后，优先运行 `python3 .skill/scripts/pptctl.py resume-brief --run-dir <项目目录>`。它默认按权威状态、决策、事件和证据即时生成；只有需要人工留档时才加 `--persist`，旧项目已有 `_state/control/resume_brief.md` 仍可读取。
 - 准备执行具体动作前，运行 `python3 .skill/scripts/pptctl.py drift-check --run-dir <项目目录> --action <动作名>`。
 - 只相信用户明确确认、主控 decision 和 `_state`；文件存在只能作为线索。
 - 状态、目录、决策或 evidence 不一致时，先运行 doctor 或汇报缺口，不继续生成。
@@ -84,7 +84,7 @@ PPT输出/<中文项目名>/
 - 阶段3逐字稿、Word、PDF 和锁定稿来源：读 [阶段3逐字稿与教案输出规范.md](references/阶段3逐字稿与教案输出规范.md)；K12 项目再读 [K12教案设计规范.md](references/K12教案设计规范.md)。
 - 阶段4整理交付：读 [阶段4整理交付规范.md](references/阶段4整理交付规范.md)、[交付文件命名规范.md](references/交付文件命名规范.md) 和 [主控决策协议.md](references/主控决策协议.md) 的阶段4完成决策。
 - QA、doctor 或交付审查：先读 [QA与doctor规范.md](references/QA与doctor规范.md)，需要详细质量清单时再读 [质量审查标准.md](references/质量审查标准.md)。
-- Canva 辅助编辑只在 `/canva`、`/可画` 或用户明确要求 Canva 时读 [Canva辅助编辑任务规范.md](references/Canva辅助编辑任务规范.md)。
+- Canva 辅助编辑只在 `/canva`、`/可画` 或用户明确要求 Canva 时读 [Canva辅助编辑任务规范.md](references/Canva辅助编辑任务规范.md)。先做当前会话工具/OAuth preflight，再创建阶段外 brief；不得把 profile 文件当作执行器已可用的证据。
 - 风格模板只在用户触发模板入口或维护模板时读 [风格模板使用规范.md](references/风格模板使用规范.md)，再读取 `assets/templates/风格模板/` 对应模板。
 
 ## 停下来汇报
@@ -95,6 +95,6 @@ PPT输出/<中文项目名>/
 - 找不到项目目录或源文件。
 - 缺少阶段1或阶段2所需用户确认。
 - 缺少正式生图路线 evidence、图片 sha、阶段3输出 manifest 或关键交付物。
-- Canva 插件导入失败、Canva 设计无权限、Magic Layers 未完成、文本层不可读或插件不支持用户要求的字体族/背景/加页删页重排等操作。
+- WorkBuddy Canva MCP 工具不可见、OAuth/设计权限失败，或 Codex Canva 插件不可见；Canva 设计无权限、Magic Layers 未完成、文本层不可读，或执行器不支持用户要求的字体族/背景/加页删页重排等操作。此时写阶段外阻断/人工待办，不把任务报告为已完成。
 - 状态文件、阶段目录、decision 和 runtime evidence 不一致。
 - 用户要求阶段3逐字稿/教案，但没有已确认的阶段2图片版 PDF 或用户确认外部锁定稿。

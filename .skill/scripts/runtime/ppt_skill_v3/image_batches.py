@@ -45,12 +45,10 @@ def create_image_generation_batch(
     batch_path = image_generation_batch_path(root, stage, purpose, group["group_id"], route=resolved_route)
     timestamp = now_iso()
     batch_id = uuid.uuid4().hex
-    snapshot_batch = batch_path.parent / "history" / (batch_id + ".json")
     manifest = {
         "schema_version": "2.0",
         "batch_id": group["group_id"],
         "generation_batch_id": batch_id,
-        "current_batch_path": _relative_or_text(root, batch_path),
         "packet_prompt_hashes": {},
         "execution_group_id": group["group_id"],
         "stage": _normalize_stage(stage),
@@ -74,14 +72,13 @@ def create_image_generation_batch(
         manifest["legacy_batch_kind"] = "image_api"
     for packet_path in packet_paths:
         packet = read_json(packet_path)
-        packet["generation_batch_path"] = _relative_or_text(root, snapshot_batch)
+        packet["generation_batch_path"] = _relative_or_text(root, batch_path)
         # Each dispatch creates a new planned request; repeated executions create new attempts.
         packet.pop("generation_request_id", None)
         frozen_path, packet = prepare_image_request(root, packet_path, packet, submitted=False)
         manifest["packet_paths"].append(_relative_or_text(root, frozen_path))
         atomic_json(packet_path, packet)
         manifest["packet_prompt_hashes"][packet["packet_id"]] = hashlib.sha256(packet["prompt"].encode()).hexdigest()
-    atomic_json(snapshot_batch, manifest)
     atomic_json(batch_path, manifest)
     return batch_path
 
@@ -147,39 +144,16 @@ def record_image_generation_batch_result(run_dir: str | Path, packet: dict[str, 
     results = manifest.setdefault("results", {})
     if not isinstance(results, dict):
         raise ValidationError("image generation batch.results must be an object")
+    # The batch is only the current progress index.  Request, provider and
+    # formal-result facts live in their own immutable records, so do not copy
+    # the whole evidence payload into every manifest update.
     entry = {
         "slide_index": packet["slide_index"],
         "generation_request_id": packet.get("generation_request_id"),
-        "prompt_hash": packet.get("prompt_hash"),
         "prompt_text_sha256": hashlib.sha256(packet["prompt"].encode()).hexdigest(),
         "option_id": packet.get("option_id"),
-        "image_generation_route": route,
-        "tool_call_id": result.get("tool_call_id"),
-        "generation_id": result.get("generation_id"),
-        "image_gen_result_id": result.get("image_gen_result_id"),
-        "api_call_id": result.get("api_call_id"),
-        "image_api_result_id": result.get("image_api_result_id"),
-        "request_id": result.get("request_id"),
-        "api_endpoint": result.get("api_endpoint"),
-        "model": result.get("model"),
-        "response_format": result.get("response_format"),
-        "provider_image_url": result.get("provider_image_url"),
+        "result_path": result.get("result_path"),
         "image_sha256": result["image_sha256"],
-        "width_px": result.get("width_px"),
-        "height_px": result.get("height_px"),
-        "aspect_ratio": result.get("aspect_ratio"),
-        "target_aspect_ratio": result.get("target_aspect_ratio"),
-        "aspect_ratio_error": result.get("aspect_ratio_error"),
-        "aspect_ratio_tolerance": result.get("aspect_ratio_tolerance"),
-        "meets_target_aspect_ratio": result.get("meets_target_aspect_ratio"),
-        "target_size": result.get("target_size"),
-        "preferred_minimum_size": result.get("preferred_minimum_size"),
-        "target_size_tolerance_px": result.get("target_size_tolerance_px"),
-        "size_policy": result.get("size_policy"),
-        "postprocess_policy": result.get("postprocess_policy"),
-        "meets_preferred_size": result.get("meets_preferred_size"),
-        "meets_target_size": result.get("meets_target_size"),
-        "size_warnings": result.get("size_warnings"),
         "image_path": result["image_path"],
         "recorded_at": now_iso(),
     }
@@ -188,16 +162,13 @@ def record_image_generation_batch_result(run_dir: str | Path, packet: dict[str, 
     if isinstance(result.get("api_evidence_path"), str):
         entry["api_evidence_path"] = result["api_evidence_path"]
     expected = manifest.get("packet_prompt_hashes", {}).get(packet_id)
-    if expected and expected != entry["prompt_text_sha256"]:
+    if expected and expected != hashlib.sha256(packet["prompt"].encode()).hexdigest():
         raise ValidationError("实际请求与所属批次提示词不一致")
     results[packet_id] = entry
     manifest["completed_packets"] = len(results)
     manifest["status"] = "completed" if len(results) >= manifest["total_packets"] else "partial"
     manifest["updated_at"] = now_iso()
     atomic_json(batch_path, manifest)
-    alias = manifest.get("current_batch_path")
-    if alias and (root / alias).exists() and read_json(root / alias).get("generation_batch_id") == manifest.get("generation_batch_id"):
-        atomic_json(root / alias, manifest)
     return batch_path
 
 

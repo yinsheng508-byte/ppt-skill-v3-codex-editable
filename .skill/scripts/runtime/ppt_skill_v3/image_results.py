@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -8,7 +9,7 @@ from typing import Any
 from .canonical_images import CANONICAL_POLICIES, canonicalize_image, parse_size
 from .dev_mode import require_dev_fixture_enabled
 from .events import append_event
-from .image_prompt_docs import record_prompt_document, PROMPTS_RELPATH, atomic_json
+from .image_prompt_docs import record_prompt_document, refresh_prompt_delivery, PROMPTS_RELPATH, atomic_json
 from .image_style import packet_matches_current, result_is_current
 from .image_batches import record_image_generation_batch_result, require_image_generation_batch_for_packet
 from .image_api_defaults import DEFAULT_IMAGE_API_RESPONSE_FORMAT
@@ -270,27 +271,22 @@ def record_image_result(
         rel_image_path = f"_state/阶段2/prompt_history/stale_images/{request_key}{recorded_suffix}"
         result_path = root / "_state/阶段2/prompt_history/stale_results" / (request_key + ".json")
         result.update(image_path=rel_image_path, result_path=_relative_or_text(root, result_path), stale_for_current_style=True)
+    immutable_image = _immutable_evidence_image_path(root, image_sha256, recorded_suffix)
+    _link_or_copy_image(recorded_image_path, immutable_image, image_sha256)
     dest = root / rel_image_path
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if recorded_image_path.resolve() != dest.resolve():
-        shutil.copy2(recorded_image_path, dest)
+    # The page-named path is the current adopted image.  Re-recording a page
+    # may deliberately replace it; the previous bytes remain reachable from
+    # the content-addressed evidence image and its formal result record.
+    _link_or_copy_image(immutable_image, dest, image_sha256, replace=True)
+    result["source_image_snapshot"] = immutable_image.relative_to(root).as_posix()
 
     write_json(result_path, result)
     if generation_route == IMAGE_ROUTE_CODEX_IMAGE_GEN and image_gen_evidence_path:
         _update_image_gen_evidence_after_record(root, result)
     record_image_generation_batch_result(root, packet, result)
-    # Persist enough facts before the optional user-document rendering hook.
-    immutable_image = root / "_state/阶段2/prompt_history/result_images" / (image_sha256.removeprefix("sha256:") + dest.suffix)
-    immutable_image.parent.mkdir(parents=True, exist_ok=True)
-    if not immutable_image.exists():
-        shutil.copy2(dest, immutable_image)
-    result["source_image_snapshot"] = immutable_image.relative_to(root).as_posix()
-    atomic_json(result_path, result)
-    receipt = root / "_state/阶段2/prompt_history/result_receipts" / (hashlib.sha256((str(generation_id) + str(tool_call_id) + image_sha256).encode()).hexdigest() + ".json")
-    atomic_json(receipt, result)
     document_error = None
     try:
-        record_prompt_document(root, packet, result=result)
+        record_prompt_document(root, packet, result=result, render=False)
     except Exception as exc:
         document_error = str(exc)
         result["prompt_document_status"] = "pending_repair"
@@ -312,6 +308,7 @@ def record_image_result(
             state["user_artifacts"]["stage2_cover_options"] = str(review.relative_to(root))
             state["quality"]["stage2_cover_options"] = "pending_user_review"
             state["next_required_action"] = "等待用户从四张封面候选中选择整套PPT风格"
+            refresh_prompt_delivery(root)
         else:
             state["next_required_action"] = "继续记录剩余封面候选图片结果"
     elif purpose == "trial_first5":
@@ -323,12 +320,14 @@ def record_image_result(
             state["user_artifacts"]["stage2_trial_first5"] = str(summary.relative_to(root))
             state["quality"]["stage2_trial_first5"] = "pending_user_review"
             state["next_required_action"] = "等待用户确认阶段2B试样；有问题则返工阶段2设计规划和提示词"
+            refresh_prompt_delivery(root)
         else:
             state["next_required_action"] = "继续记录剩余阶段2B试样图片结果"
     elif stage == "stage2":
         if _stage2_formal_results_complete(root):
             state["status"] = "stage2_results_complete"
             state["next_required_action"] = "阶段2正式整页图片已覆盖全部页面，可以打包图片版 PDF"
+            refresh_prompt_delivery(root)
         else:
             state["status"] = f"{stage}_image_result_recorded"
             state["next_required_action"] = "主控大模型检查阶段2图片结果，全部合格后打包图片版 PDF"
@@ -557,7 +556,54 @@ def _write_attempt_record(root: Path, result: dict[str, Any], purpose: str, slid
     attempt_id = result.get("generation_request_id") or result.get("attempt_id") or f"slide-{slide_index:03d}-attempt-001"
     attempt_dir = root / "_state" / "阶段2" / "attempts" / f"slide_{slide_index:03d}"
     attempt_dir.mkdir(parents=True, exist_ok=True)
-    write_json(attempt_dir / f"{attempt_id}.json", result)
+    write_json(
+        attempt_dir / f"{attempt_id}.json",
+        {
+            "schema_version": "1.0",
+            "attempt_id": attempt_id,
+            "slide_index": slide_index,
+            "purpose": purpose,
+            "status": "recorded",
+            "generation_request_id": result.get("generation_request_id"),
+            "result_path": result.get("result_path"),
+            "provider_evidence_path": result.get("api_evidence_path") or result.get("image_gen_evidence_path"),
+            "created_at": now_iso(),
+        },
+    )
+
+
+def _link_or_copy_image(source: Path, target: Path, expected_sha256: str, *, replace: bool = False) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        actual = "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
+        if actual != expected_sha256 and not replace:
+            raise ValidationError(f"image storage collision with different content: {target}")
+        if actual == expected_sha256:
+            return
+        target.unlink()
+    if source.resolve() == target.resolve():
+        return
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
+
+
+def _immutable_evidence_image_path(root: Path, image_sha256: str, suffix: str) -> Path:
+    """Return the one content-addressed evidence image for these bytes.
+
+    The suffix is kept only for media tooling.  If an older write used a
+    different suffix for exactly the same bytes, reuse that file instead of
+    creating a second content duplicate.
+    """
+    directory = root / "_state" / "阶段2" / "prompt_history" / "result_images"
+    digest = image_sha256.removeprefix("sha256:")
+    for candidate in sorted(directory.glob(digest + ".*")) if directory.exists() else []:
+        actual = "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest()
+        if actual != image_sha256:
+            raise ValidationError(f"image evidence hash collision: {candidate}")
+        return candidate
+    return directory / (digest + suffix)
 
 
 def _image_api_response_format(packet: dict[str, Any], response_format: str | None) -> str:

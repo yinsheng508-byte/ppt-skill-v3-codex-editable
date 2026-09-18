@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 from .json_io import read_json, write_json
 from .paths import state_dir
 from .time_utils import now_iso
+from .workspace_paths import INPUT_DIRNAME, OUTPUT_DIRNAME
 
 
 CONTROLLER_SUMMARY_BEGIN = "<!-- controller-summary:start -->"
@@ -62,6 +64,9 @@ def add_material(
         record["original_name"] = source_path.name
         record["extension"] = source_path.suffix.lower() or None
         record["material_kind"] = material_kind or _infer_material_kind(source_path.suffix)
+        input_copy = _copy_file_to_input_folder(root, source_path, material_id)
+        if input_copy is not None:
+            record["input_path"] = _input_display_path(input_copy)
         target = state_dir(root) / "阶段0" / "原始资料" / f"{material_id}_{source_path.name}"
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target)
@@ -97,11 +102,12 @@ def refresh_material_docs(run_dir: str | Path) -> None:
         lines.append("| ID | 类型 | 名称 | 材料类型 | 角色 | 优先级 | 定位提示 | 位置 |")
         lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
         for item in materials:
+            location = _format_location(item)
             lines.append(
                 f"| {_markdown_cell(item.get('id'))} | {_markdown_cell(item.get('type'))} | {_markdown_cell(item.get('label'))} | "
                 f"{_markdown_cell(item.get('material_kind'))} | {_markdown_cell(item.get('role_hint'))} | "
                 f"{_markdown_cell(item.get('source_priority'))} | {_markdown_cell(item.get('locator_hint'))} | "
-                f"{_markdown_cell(item.get('stored_path') or item.get('source'))} |"
+                f"{_markdown_cell(location)} |"
             )
     lines.append("")
     (root / "阶段0_资料整理" / "资料清单.md").write_text("\n".join(lines), encoding="utf-8")
@@ -140,6 +146,53 @@ def _infer_material_kind(extension: str) -> str:
     if normalized in {"md", "txt"}:
         return "text"
     return normalized or "file"
+
+
+def _copy_file_to_input_folder(root: Path, source_path: Path, material_id: str) -> Path | None:
+    input_root = _input_root_for_project(root)
+    if input_root is None:
+        return None
+    input_root.mkdir(parents=True, exist_ok=True)
+    source_resolved = source_path.resolve()
+    input_root_resolved = input_root.resolve()
+    try:
+        source_resolved.relative_to(input_root_resolved)
+        return source_resolved
+    except ValueError:
+        pass
+
+    target = input_root / root.name / f"{material_id}_{source_path.name}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if source_resolved != target.resolve():
+        shutil.copy2(source_path, target)
+    return target
+
+
+def _input_root_for_project(root: Path) -> Path | None:
+    env_input = os.environ.get("PPT_SKILL_INPUT_ROOT")
+    if env_input:
+        return Path(env_input).expanduser().resolve()
+    for current in [root.resolve(), *root.resolve().parents]:
+        if current.name == OUTPUT_DIRNAME:
+            return current.parent / INPUT_DIRNAME
+    return None
+
+
+def _input_display_path(input_path: Path) -> str:
+    path = input_path.resolve()
+    for parent in path.parents:
+        if parent.name == INPUT_DIRNAME:
+            return str(path.relative_to(parent.parent))
+    return str(path)
+
+
+def _format_location(item: dict[str, Any]) -> str:
+    parts = []
+    if item.get("input_path"):
+        parts.append(f"入口：{item['input_path']}")
+    if item.get("stored_path"):
+        parts.append(f"归档：{item['stored_path']}")
+    return "；".join(parts) or item.get("source") or "待判断"
 
 
 def _display(value: Any) -> str:

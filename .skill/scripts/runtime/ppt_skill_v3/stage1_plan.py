@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -103,12 +105,17 @@ def create_stage1_draft(run_dir: str | Path, slide_count: int = 1) -> Path:
             for index in range(1, slide_count + 1)
         ],
     }
+    draft_content = _draft_content(slide_count)
+    content_digest = content_source_sha256(draft_content)
+    draft["content_source_sha256"] = content_digest
     if not stage1_slides_path(root).exists():
         write_json(stage1_slides_path(root), draft)
     if not content_path(root).exists():
-        save_content(root, _draft_content(slide_count))
+        save_content(root, draft_content)
     if not slide_prompt_briefs_path(root).exists():
-        save_slide_prompt_briefs(root, _draft_prompt_briefs(slide_count))
+        briefs = _draft_prompt_briefs(slide_count)
+        briefs["content_source_sha256"] = content_digest
+        save_slide_prompt_briefs(root, briefs)
     if not design_contract_path(root).exists():
         save_design_contract(root, _draft_design_contract(slide_count))
     state = read_state(root)
@@ -128,6 +135,66 @@ def save_stage1_slides(run_dir: str | Path, plan: dict[str, Any]) -> None:
     write_json(stage1_slides_path(run_dir), plan)
 
 
+def content_source_sha256(content: dict[str, Any]) -> str:
+    """Digest the one controller-authored Stage 1 text source deterministically."""
+
+    encoded = json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def sync_stage1_derivatives(run_dir: str | Path) -> dict[str, Any]:
+    """Regenerate Stage 1 text derivatives from the only editable source: content.json."""
+
+    root = Path(run_dir)
+    content = validate_content_asset(load_content(root))
+    plan = load_stage1_slides(root)
+    briefs = load_slide_prompt_briefs(root)
+    _validate_derivative_shell(plan, "stage1_plan")
+    _validate_derivative_shell(briefs, "slide_prompt_briefs")
+    require_matching_slide_indices(("stage1_plan", plan), ("content", content), ("slide_prompt_briefs", briefs))
+    content_by_index = {slide["slide_index"]: slide for slide in content["slides"]}
+    for slide in plan["slides"]:
+        source = content_by_index[slide["slide_index"]]
+        slide["title"] = source["title"]
+        slide["purpose"] = source["purpose"]
+        slide["core_content"] = "\n".join(source["final_visible_text"])
+    for brief in briefs["slides"]:
+        source = content_by_index[brief["slide_index"]]
+        brief["page_role"] = source.get("page_role") or source["page_type"]
+        brief["message_goal"] = source["purpose"]
+        brief["final_visible_text"] = list(source["final_visible_text"])
+    digest = content_source_sha256(content)
+    plan["content_source_sha256"] = digest
+    briefs["content_source_sha256"] = digest
+    plan = validate_stage1_plan(plan)
+    briefs = validate_slide_prompt_briefs(briefs)
+    save_stage1_slides(root, plan)
+    save_slide_prompt_briefs(root, briefs)
+    _render_stage1_text_docs(root, plan, content)
+    return {
+        "content_source": str(content_path(root).relative_to(root)),
+        "content_source_sha256": digest,
+        "slides_count": len(content["slides"]),
+        "updated": [
+            str(stage1_slides_path(root).relative_to(root)),
+            str(slide_prompt_briefs_path(root).relative_to(root)),
+            "阶段1_规划确认/页面规划.md",
+            str(stage1_clean_transcript_path(root).relative_to(root)),
+        ],
+    }
+
+
+def _validate_derivative_shell(value: Any, label: str) -> None:
+    if not isinstance(value, dict) or value.get("schema_version") not in {"2.0", "2.3"}:
+        raise ValidationError(f"{label} must be a supported Stage 1 object")
+    slides = value.get("slides")
+    if not isinstance(slides, list) or not slides:
+        raise ValidationError(f"{label}.slides must be a non-empty list")
+    for index, slide in enumerate(slides, start=1):
+        if not isinstance(slide, dict) or not isinstance(slide.get("slide_index"), int):
+            raise ValidationError(f"{label}.slides[{index}].slide_index must be an integer")
+
+
 def validate_stage1_project(run_dir: str | Path) -> dict[str, Any]:
     root = Path(run_dir)
     report_path = state_dir(root) / "阶段1" / "validation_report.json"
@@ -143,6 +210,7 @@ def validate_stage1_project(run_dir: str | Path) -> dict[str, Any]:
             ("content", content),
             ("slide_prompt_briefs", prompt_briefs),
         )
+        _validate_stage1_derivative_source(content, plan, prompt_briefs)
         require_matching_visible_text(content, prompt_briefs)
         clean_transcript_path = _validate_clean_transcript_doc(root, content)
         ppt_consistency_path = validate_ppt_consistency_doc(root, content)
@@ -195,6 +263,125 @@ def validate_stage1_project(run_dir: str | Path) -> dict[str, Any]:
     write_json(report_path, report)
     append_event(root, "stage1_validated", "runtime", slides_count=len(plan["slides"]))
     return report
+
+
+def _validate_stage1_derivative_source(
+    content: dict[str, Any],
+    plan: dict[str, Any],
+    prompt_briefs: dict[str, Any],
+) -> None:
+    """Keep legacy projects readable while requiring a fresh sync for new assets."""
+
+    values = [plan.get("content_source_sha256"), prompt_briefs.get("content_source_sha256")]
+    present = [value for value in values if isinstance(value, str) and value.strip()]
+    if not present:
+        return
+    if len(present) != len(values):
+        raise ValidationError("Stage 1 派生资料的 content_source_sha256 不完整，请执行 sync-stage1-derivatives")
+    expected = content_source_sha256(content)
+    if any(value != expected for value in present):
+        raise ValidationError("content.json 已更新，页面规划或提示词 brief 未同步；请执行 sync-stage1-derivatives")
+
+
+def _render_stage1_text_docs(root: Path, plan: dict[str, Any], content: dict[str, Any]) -> None:
+    content_by_index = {slide["slide_index"]: slide for slide in content["slides"]}
+    plan_lines = [
+        "# 页面规划",
+        "",
+        "本文件由 `_state/阶段1/content.json` 同步生成；文字修改请回到 content.json，再执行同步。",
+        "",
+        "| 页码 | 页面角色 | 页面标题 | 本页目的 | 页面具体文字 | 资料依据 | 内容保留边界 | 视觉意图 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    transcript_lines = [
+        "# 每页干净逐字稿",
+        "",
+        "本文件由 `_state/阶段1/content.json` 同步生成；文字修改请回到 content.json，再执行同步。",
+        "",
+    ]
+    for slide in plan["slides"]:
+        source = content_by_index[slide["slide_index"]]
+        role = source.get("page_role") or source["page_type"]
+        title = _markdown_table_cell(source["title"])
+        purpose = _markdown_table_cell(source["purpose"])
+        visible = _markdown_table_cell("<br>".join(str(text) for text in source["final_visible_text"]))
+        source_basis = _markdown_table_cell(_render_source_basis(source))
+        content_boundary = _markdown_table_cell(_render_content_boundary(source))
+        visual = _markdown_table_cell(str(slide.get("visual_intent", "")))
+        plan_lines.append(
+            f"| {slide['slide_index']:02d} | {role} | {title} | {purpose} | {visible} | {source_basis} | {content_boundary} | {visual} |"
+        )
+        transcript_lines.extend(
+            [
+                f"## 第 {slide['slide_index']:02d} 页｜{source['title']}",
+                "",
+                f"**页面角色**：{role}",
+                f"**本页目的**：{source['purpose']}",
+                "",
+                "### 页面可见文字",
+                "",
+                *[f"- {text}" for text in source["final_visible_text"]],
+                "",
+            ]
+        )
+    (root / "阶段1_规划确认/页面规划.md").write_text("\n".join(plan_lines) + "\n", encoding="utf-8")
+    stage1_clean_transcript_path(root).write_text("\n".join(transcript_lines), encoding="utf-8")
+
+
+def _render_source_basis(slide: dict[str, Any]) -> str:
+    basis_items = slide.get("source_basis")
+    if not isinstance(basis_items, list):
+        return ""
+    rendered: list[str] = []
+    for item in basis_items:
+        if not isinstance(item, dict):
+            continue
+        material = item.get("material_id") or item.get("material") or item.get("source") or item.get("title")
+        pieces = [str(material).strip()] if isinstance(material, str) and material.strip() else []
+        locator = item.get("locator") or item.get("quote_locator")
+        if isinstance(locator, str) and locator.strip():
+            pieces.append(locator.strip())
+        usage = item.get("usage") or item.get("reason")
+        if isinstance(usage, str) and usage.strip():
+            pieces.append(usage.strip())
+        quote = item.get("quote")
+        if isinstance(quote, str) and quote.strip():
+            pieces.append(f"引用：{quote.strip()}")
+        if pieces:
+            rendered.append(" / ".join(pieces))
+    return "；".join(rendered)
+
+
+def _render_content_boundary(slide: dict[str, Any]) -> str:
+    sections: list[str] = []
+    text_contract = slide.get("text_contract")
+    if isinstance(text_contract, dict):
+        for label, field in (
+            ("必须保留", "must_keep"),
+            ("不得删除", "do_not_remove"),
+            ("不得编造", "do_not_invent"),
+            ("可软润色", "can_soft_polish"),
+        ):
+            values = text_contract.get(field)
+            if isinstance(values, list):
+                clean_values = [str(value).strip() for value in values if str(value).strip()]
+                if clean_values:
+                    sections.append(f"{label}：" + "、".join(clean_values))
+            elif isinstance(values, str) and values.strip():
+                sections.append(f"{label}：{values.strip()}")
+    facts = slide.get("facts_to_preserve")
+    if isinstance(facts, list):
+        clean_facts = [str(value).strip() for value in facts if str(value).strip()]
+        if clean_facts:
+            sections.append("事实保留：" + "、".join(clean_facts))
+    mutation_level = slide.get("content_mutation_level")
+    if isinstance(mutation_level, str) and mutation_level.strip():
+        sections.append(f"改写等级：{mutation_level.strip()}")
+    return "；".join(sections)
+
+
+def _markdown_table_cell(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\n", "<br>")
 
 
 def _reject_placeholders(plan: dict[str, Any]) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,13 @@ from .validation import validate_stage1_plan
 
 READ_ONLY_ACTIONS = {"status", "doctor", "resume_brief", "next_action", "drift_check"}
 DECISION_ACTIONS = {"record_decision", "execute_decision"}
+FULL_DOCTOR_ACTIONS = {
+    "doctor",
+    "validate_stage1",
+    "stage2_ready_for_user_review",
+    "stage3_outputs_completed",
+    "stage4_deliverables_organized",
+}
 BROAD_ACTION_RULES: dict[str, dict[str, Any]] = {
     "stage1_plan": {"stages": {"stage0", "stage1"}, "actor": "main_controller"},
     "stage2_image": {"stages": {"stage2"}, "actor": "main_controller", "requires_confirmed": "stage1_plan"},
@@ -90,7 +98,7 @@ CONFIRMATION_REQUIREMENTS: dict[str, tuple[str, str]] = {
 }
 
 
-def run_drift_check(run_dir: str | Path, *, action: str | None = None, persist: bool = True) -> dict[str, Any]:
+def run_drift_check(run_dir: str | Path, *, action: str | None = None, persist: bool = False) -> dict[str, Any]:
     root = Path(run_dir)
     normalized_action = _normalize_action(action)
     issues: list[str] = []
@@ -110,12 +118,7 @@ def run_drift_check(run_dir: str | Path, *, action: str | None = None, persist: 
     if normalized_action:
         _check_action(root, state, normalized_action, issues, warnings)
     _check_stage3_drift(root, state, normalized_action, issues, warnings)
-    doctor = check_project(root)
-    if normalized_action == "canva_auxiliary":
-        warnings.extend(f"doctor: {issue}" for issue in doctor.get("issues", []))
-    else:
-        issues.extend(f"doctor: {issue}" for issue in doctor.get("issues", []))
-    warnings.extend(f"doctor: {warning}" for warning in doctor.get("warnings", []))
+    doctor = _run_action_checks(root, state, normalized_action, issues, warnings)
     result = _result(root, normalized_action, state, issues, warnings, allowed_next_actions, doctor)
     return _persist(root, result, persist)
 
@@ -133,13 +136,13 @@ def _check_action(root: Path, state: dict[str, Any], action: str, issues: list[s
         if broad_rule is not None:
             _check_broad_action(state, action, broad_rule, issues, warnings)
             return
-        warnings.append(f"未配置 action 状态矩阵：{action}；仅执行通用防漂移检查")
+        warnings.append(f"未配置 action 状态矩阵：{action}；将回退完整项目检查")
     requirement = CONFIRMATION_REQUIREMENTS.get(action)
     if requirement:
         key, message = requirement
         confirmed = state.get("confirmed") if isinstance(state.get("confirmed"), dict) else {}
         if not confirmed.get(key):
-            if action in {"build_speaker_script", "build_lesson_plan"} and state.get("stage3_locked_presentation_source"):
+            if action in {"build_speaker_script", "build_lesson_plan"} and _has_external_locked_stage3_source(state):
                 return
             issues.append(message)
     if action in {"build_speaker_script", "build_lesson_plan"} and not state.get("stage3_locked_presentation_source"):
@@ -147,6 +150,146 @@ def _check_action(root: Path, state: dict[str, Any], action: str, issues: list[s
         issues.append(f"阶段3缺少 stage3_locked_presentation_source，不能生成{target}")
     if action in {"record_decision", "execute_decision"} and state.get("required_actor") == "user":
         warnings.append("当前等待用户确认；record/execute decision 前必须确认 decision.user_confirmed 与用户真实反馈一致")
+
+
+def _run_action_checks(
+    root: Path,
+    state: dict[str, Any],
+    action: str | None,
+    issues: list[str],
+    warnings: list[str],
+) -> dict[str, Any]:
+    """Run full project inspection only when a formal project handoff needs it.
+
+    Stage 2 cover/trial display and image-result recording keep their strict
+    action/state checks above, but must not scan unrelated Stage 3/4 outputs.
+    """
+
+    if action in FULL_DOCTOR_ACTIONS or (action is not None and not _known_action(action)):
+        return _run_full_doctor(root, action, issues, warnings)
+
+    scope = _action_scope(action)
+    try:
+        _check_action_scope(root, state, scope, issues, warnings)
+    except Exception as exc:
+        warnings.append(f"{scope} 专项检查异常，已回退完整 doctor：{exc}")
+        return _run_full_doctor(root, action, issues, warnings, fallback_reason="scoped_checker_exception")
+    return {
+        "mode": "scoped",
+        "scope": scope,
+        "ok": not issues,
+        "issues": [],
+        "warnings": [],
+    }
+
+
+def _run_full_doctor(
+    root: Path,
+    action: str | None,
+    issues: list[str],
+    warnings: list[str],
+    *,
+    fallback_reason: str | None = None,
+) -> dict[str, Any]:
+    doctor = check_project(root)
+    if action == "canva_auxiliary":
+        warnings.extend(f"doctor: {issue}" for issue in doctor.get("issues", []))
+    else:
+        issues.extend(f"doctor: {issue}" for issue in doctor.get("issues", []))
+    warnings.extend(f"doctor: {warning}" for warning in doctor.get("warnings", []))
+    result = {"mode": "full", **doctor}
+    if fallback_reason:
+        result["fallback_reason"] = fallback_reason
+    return result
+
+
+def _known_action(action: str) -> bool:
+    return (
+        action in READ_ONLY_ACTIONS
+        or action in DECISION_ACTIONS
+        or action in FULL_DOCTOR_ACTIONS
+        or action in ACTION_RULES
+        or action in BROAD_ACTION_RULES
+    )
+
+
+def _action_scope(action: str | None) -> str:
+    if action in {
+        "record_image_result",
+        "run_image_api_batch",
+        "dispatch_cover_options",
+        "dispatch_stage2_cover_options",
+        "dispatch_stage2_trial_first5",
+        "dispatch_stage2_remaining",
+        "promote_selected_cover_option",
+        "promote_stage2_trial_first5",
+    }:
+        return "stage2_batch"
+    if action == "stage2_image":
+        return "stage2_current_images"
+    if action == "build_image_deck":
+        return "stage2_pdf_input"
+    if action in {"build_speaker_script", "build_lesson_plan", "record_lesson_plan_qa"}:
+        return "stage3_locked_source"
+    if action == "organize_deliverables":
+        return "stage4_delivery_input"
+    return "state_only"
+
+
+def _check_action_scope(
+    root: Path,
+    state: dict[str, Any],
+    scope: str,
+    issues: list[str],
+    warnings: list[str],
+) -> None:
+    if scope == "stage2_batch":
+        # State, confirmation and purpose-specific packet/result validation run
+        # in the action implementation.  Do not add a project-wide document
+        # scan here: legacy fixtures and valid in-flight batches may not yet
+        # have future-stage artifacts.
+        return
+    elif scope == "stage2_current_images":
+        # This is the narrow current-image guard used while Stage 2 is being
+        # revised.  It deliberately does not inspect Stage 3/4 artifacts.
+        from .doctor import _check_stage2_current_image_results
+
+        _check_stage2_current_image_results(root, issues, warnings, require_complete=False)
+    elif scope == "stage2_pdf_input":
+        _check_build_image_deck_inputs(root, state, issues)
+    elif scope == "stage3_locked_source":
+        source = state.get("stage3_locked_presentation_source")
+        if not isinstance(source, dict):
+            issues.append("阶段3缺少 stage3_locked_presentation_source，不能生成阶段3产物")
+            return
+        mode = source.get("source_mode")
+        allowed_modes = {"stage2_image_deck", "external_locked_deck"}
+        if mode not in allowed_modes:
+            issues.append(f"阶段3锁定稿 source_mode 无效：{mode}；只允许 stage2_image_deck 或 external_locked_deck")
+        path = source.get("source_path")
+        source_path = root / path if isinstance(path, str) and path.strip() else None
+        if source_path is None or not source_path.exists():
+            issues.append("阶段3锁定稿不存在，不能生成阶段3产物")
+            return
+        if mode == "stage2_image_deck":
+            confirmed = state.get("confirmed") if isinstance(state.get("confirmed"), dict) else {}
+            if not confirmed.get("stage2_image_deck"):
+                issues.append("尚未确认阶段2图片版 PDF，不能生成阶段3产物")
+        elif mode == "external_locked_deck":
+            basis = source.get("confirmation_basis")
+            if not isinstance(basis, str) or not basis.strip():
+                issues.append("外部锁定稿缺少 confirmation_basis，不能生成阶段3产物")
+            expected_sha = source.get("source_sha256")
+            actual_sha = _sha256_file(source_path)
+            if not isinstance(expected_sha, str) or not expected_sha.strip():
+                issues.append("外部锁定稿缺少 source_sha256，不能生成阶段3产物")
+            elif expected_sha != actual_sha:
+                issues.append("外部锁定稿 source_sha256 与实际文件不一致，不能生成阶段3产物")
+    elif scope == "stage4_delivery_input":
+        # Stage 4 is intentionally passive: its own organizer records which
+        # existing outputs were copied or skipped.  Missing optional source
+        # files must not be converted into a global action blocker here.
+        return
 
 
 def _check_specific_action(
@@ -211,7 +354,14 @@ def _check_broad_action(
     confirmed = state.get("confirmed") if isinstance(state.get("confirmed"), dict) else {}
     required_confirmation = rule.get("requires_confirmed")
     if isinstance(required_confirmation, str) and not confirmed.get(required_confirmation):
-        issues.append(f"{action} 缺少确认：{required_confirmation}")
+        source = state.get("stage3_locked_presentation_source")
+        external_locked = (
+            required_confirmation == "stage2_image_deck"
+            and isinstance(source, dict)
+            and source.get("source_mode") == "external_locked_deck"
+        )
+        if not external_locked:
+            issues.append(f"{action} 缺少确认：{required_confirmation}")
     locked_source_key = rule.get("requires_locked_source")
     if isinstance(locked_source_key, str) and not state.get(locked_source_key):
         issues.append(f"缺少 {locked_source_key}，不能执行 {action}")
@@ -222,6 +372,15 @@ def _check_broad_action(
             warnings.append("Canva 辅助任务缺少已确认阶段1文案时，只能做有限错别字检查")
         if not confirmed.get("stage2_image_deck"):
             warnings.append("Canva 辅助任务缺少已确认阶段2图片版 PDF 时，只能参考已有视觉稿，不能视为正式锁稿")
+
+
+def _has_external_locked_stage3_source(state: dict[str, Any]) -> bool:
+    source = state.get("stage3_locked_presentation_source")
+    return isinstance(source, dict) and source.get("source_mode") == "external_locked_deck"
+
+
+def _sha256_file(path: Path) -> str:
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
 def _check_stage3_drift(root: Path, state: dict[str, Any], action: str | None, issues: list[str], warnings: list[str]) -> None:
@@ -273,6 +432,8 @@ def _result(
             "ok": doctor.get("ok"),
             "issues_count": len(doctor.get("issues", [])),
             "warnings_count": len(doctor.get("warnings", [])),
+            "mode": doctor.get("mode", "full"),
+            "scope": doctor.get("scope"),
         }
         if isinstance(doctor, dict)
         else None,

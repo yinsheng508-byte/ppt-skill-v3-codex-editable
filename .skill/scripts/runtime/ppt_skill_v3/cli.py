@@ -9,7 +9,7 @@ from typing import Sequence
 from .decisions import execute_decision, load_decision, record_decision
 from .decision_factory import make_decision
 from .control import build_next_action, build_resume_brief, render_resume_brief_markdown
-from .canva_task import create_canva_task_brief
+from .canva_task import create_canva_task_brief, record_canva_task_event, record_canva_task_export
 from .cover_options import dispatch_cover_option_packets, promote_selected_cover_option
 from .deliverable_organizer import organize_deliverables
 from .doctor import check_project
@@ -35,7 +35,7 @@ from .layout_safety_contract import record_layout_safety_contract
 from .stage_docs import sync_stage_docs
 from .image_style import accept_image_result, migrate_image_style_doc, reconcile_image_style
 from .image_prompt_docs import prepare_image_request, refresh_prompt_delivery, export_prompt_document
-from .stage1_plan import create_stage1_draft, validate_stage1_project
+from .stage1_plan import create_stage1_draft, sync_stage1_derivatives, validate_stage1_project
 from .stage2_trial import (
     authorize_stage2_trial_skip,
     dispatch_stage2_remaining_packets,
@@ -107,11 +107,14 @@ def build_parser() -> argparse.ArgumentParser:
     resume_brief_parser = subparsers.add_parser("resume-brief", help="Build a resumable project control brief.")
     resume_brief_parser.add_argument("--run-dir", required=True)
     resume_brief_parser.add_argument("--format", choices=["json", "markdown"], default="json")
+    resume_brief_parser.add_argument("--persist", action="store_true", help="Explicitly save the generated control brief.")
     next_action_parser = subparsers.add_parser("next-action", help="Build the next permitted controller action summary.")
     next_action_parser.add_argument("--run-dir", required=True)
+    next_action_parser.add_argument("--persist", action="store_true", help="Explicitly save the generated next-action view.")
     drift_check_parser = subparsers.add_parser("drift-check", help="Check whether a controller action would drift across stage boundaries.")
     drift_check_parser.add_argument("--run-dir", required=True)
     drift_check_parser.add_argument("--action")
+    drift_check_parser.add_argument("--persist", action="store_true", help="Explicitly save the generated drift report.")
     create_packet_parser = subparsers.add_parser("create-work-packet", help="Create one bounded long-task work packet.")
     create_packet_parser.add_argument("--run-dir", required=True)
     create_packet_parser.add_argument("--stage", choices=["stage0", "stage1", "stage2", "stage3", "stage4"], required=True)
@@ -140,8 +143,34 @@ def build_parser() -> argparse.ArgumentParser:
     canva_task_parser.add_argument("--run-dir", required=True)
     canva_task_parser.add_argument("--task-id")
     canva_task_parser.add_argument("--trigger", default="/canva")
+    canva_task_parser.add_argument("--provider", default="canva_international")
+    canva_task_parser.add_argument("--host-profile", choices=["codex", "workbuddy", "unknown"], default="unknown")
+    canva_task_parser.add_argument("--executor", choices=["canva_mcp", "canva_plugin", "manual_handoff", "unresolved"], default="unresolved")
+    canva_event_parser = subparsers.add_parser("record-canva-task-event", help="Append one sanitized stage-external Canva batch event.")
+    canva_event_parser.add_argument("--run-dir", required=True)
+    canva_event_parser.add_argument("--task-id", required=True)
+    canva_event_parser.add_argument("--event-json", required=True, help="Inline JSON object for one batch_edit event.")
+    canva_event_parser.add_argument(
+        "--status",
+        choices=[
+            "brief_ready",
+            "waiting_manual_magic_layers",
+            "ready_for_page_audit",
+            "editing",
+            "waiting_batch_confirmation",
+            "completed",
+            "cancelled",
+            "blocked_connector",
+        ],
+    )
+    canva_export_parser = subparsers.add_parser("record-canva-task-export", help="Record one sanitized stage-external Canva export attempt.")
+    canva_export_parser.add_argument("--run-dir", required=True)
+    canva_export_parser.add_argument("--task-id", required=True)
+    canva_export_parser.add_argument("--export-json", required=True, help="Inline JSON object for one actual export attempt.")
     validate_stage1_parser = subparsers.add_parser("validate-stage1", help="Validate controller-authored stage1 plan.")
     validate_stage1_parser.add_argument("--run-dir", required=True)
+    sync_stage1_parser = subparsers.add_parser("sync-stage1-derivatives", help="Regenerate stage1 plan, prompt briefs, and review text from content.json.")
+    sync_stage1_parser.add_argument("--run-dir", required=True)
     layout_safety_parser = subparsers.add_parser("record-layout-safety-contract", help="Record controller-authored stage1 layout safety contract.")
     layout_safety_parser.add_argument("--run-dir", required=True)
     layout_safety_parser.add_argument("--contract", required=True)
@@ -196,7 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
     image_api_key_status_parser.add_argument("--key-file")
     cover_options_parser = subparsers.add_parser("dispatch-cover-options", help="Create four parallel cover style image generation packets.")
     cover_options_parser.add_argument("--run-dir", required=True)
-    cover_options_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
+    cover_options_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api", "grsai", "grsai-api", "grsai_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
     promote_cover_parser = subparsers.add_parser("promote-selected-cover-option", help="Promote the approved cover option to a formal stage2 full_slide result.")
     promote_cover_parser.add_argument("--run-dir", required=True)
     promote_cover_parser.add_argument("--force", action="store_true")
@@ -206,16 +235,16 @@ def build_parser() -> argparse.ArgumentParser:
     dispatch_generation_parser = subparsers.add_parser("dispatch-image-generation", help="Create parallel image generation packets for the selected route.")
     dispatch_generation_parser.add_argument("--run-dir", required=True)
     dispatch_generation_parser.add_argument("--stage", choices=["stage2"], required=True)
-    dispatch_generation_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
+    dispatch_generation_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api", "grsai", "grsai-api", "grsai_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
     trial_parser = subparsers.add_parser("dispatch-stage2-trial-first5", help="Create stage2B trial sample image generation packets.")
     trial_parser.add_argument("--run-dir", required=True)
     trial_parser.add_argument("--sample-count", type=int, default=5, help="试样总共5页，含已选封面，通常新增4张内页；仅用户明确指定时覆盖")
     trial_parser.add_argument("--extra-slide", type=int, action="append", default=[])
     trial_parser.add_argument("--extra-reason", action="append", default=[])
-    trial_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
+    trial_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api", "grsai", "grsai-api", "grsai_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
     remaining_parser = subparsers.add_parser("dispatch-stage2-remaining", help="Create stage2 remaining full-slide image generation packets after trial approval.")
     remaining_parser.add_argument("--run-dir", required=True)
-    remaining_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
+    remaining_parser.add_argument("--route", choices=["codex-image-gen", "codex_image_gen", "image-gen", "image_gen", "openai-image-api", "openai_image_api", "direct-api", "direct_api", "cangyuan", "cangyuan-api", "cangyuan_api", "grsai", "grsai-api", "grsai_api"], default=DEFAULT_IMAGE_GENERATION_ROUTE)
     promote_trial_parser = subparsers.add_parser("promote-stage2-trial-first5", help="Promote approved stage2 trial sample results to formal full_slide results.")
     promote_trial_parser.add_argument("--run-dir", required=True)
     promote_trial_parser.add_argument("--force", action="store_true")
@@ -357,17 +386,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(read_state(args.run_dir), ensure_ascii=False))
         return 0
     if args.command == "resume-brief":
-        brief = build_resume_brief(args.run_dir)
+        brief = build_resume_brief(args.run_dir, persist=args.persist)
         if args.format == "markdown":
             print(render_resume_brief_markdown(brief))
         else:
             print(json.dumps(brief, ensure_ascii=False))
         return 0
     if args.command == "next-action":
-        print(json.dumps(build_next_action(args.run_dir), ensure_ascii=False))
+        print(json.dumps(build_next_action(args.run_dir, persist=args.persist), ensure_ascii=False))
         return 0
     if args.command == "drift-check":
-        result = run_drift_check(args.run_dir, action=args.action)
+        result = run_drift_check(args.run_dir, action=args.action, persist=args.persist)
         print(json.dumps(result, ensure_ascii=False))
         return 0 if result["ok"] else 1
     if args.command == "create-work-packet":
@@ -397,7 +426,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(organize_deliverables(args.run_dir), ensure_ascii=False))
         return 0
     if args.command == "create-canva-task-brief":
-        result = create_canva_task_brief(args.run_dir, task_id=args.task_id, trigger=args.trigger)
+        result = create_canva_task_brief(
+            args.run_dir,
+            task_id=args.task_id,
+            trigger=args.trigger,
+            provider=args.provider,
+            host_profile=args.host_profile,
+            executor=args.executor,
+        )
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    if args.command == "record-canva-task-event":
+        try:
+            event = json.loads(args.event_json)
+        except json.JSONDecodeError as exc:
+            raise ValidationError(f"--event-json must be valid JSON: {exc.msg}") from exc
+        if not isinstance(event, dict):
+            raise ValidationError("--event-json must decode to an object")
+        result = record_canva_task_event(args.run_dir, args.task_id, event=event, status=args.status)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    if args.command == "record-canva-task-export":
+        try:
+            export = json.loads(args.export_json)
+        except json.JSONDecodeError as exc:
+            raise ValidationError(f"--export-json must be valid JSON: {exc.msg}") from exc
+        if not isinstance(export, dict):
+            raise ValidationError("--export-json must decode to an object")
+        result = record_canva_task_export(args.run_dir, args.task_id, export=export)
         print(json.dumps(result, ensure_ascii=False))
         return 0
     if args.command == "add-material":
@@ -585,6 +641,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         report = validate_stage1_project(args.run_dir)
         print(json.dumps(report, ensure_ascii=False))
         return 0 if report["ok"] else 1
+    if args.command == "sync-stage1-derivatives":
+        print(json.dumps(sync_stage1_derivatives(args.run_dir), ensure_ascii=False))
+        return 0
     if args.command == "record-decision":
         target = record_decision(args.run_dir, read_json(args.decision_file))
         print(json.dumps({"status": "recorded", "path": str(target)}, ensure_ascii=False))

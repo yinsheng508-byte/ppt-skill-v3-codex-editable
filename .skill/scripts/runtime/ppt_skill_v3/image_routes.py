@@ -65,6 +65,7 @@ def normalize_image_generation_route(route: str | None) -> str:
         "cangyuan": IMAGE_ROUTE_OPENAI_IMAGE_API,
         "cangyuan_api": IMAGE_ROUTE_OPENAI_IMAGE_API,
         "grsai": IMAGE_ROUTE_OPENAI_IMAGE_API,
+        "grsai_api": IMAGE_ROUTE_OPENAI_IMAGE_API,
         "relay_api": IMAGE_ROUTE_OPENAI_IMAGE_API,
         "transit_api": IMAGE_ROUTE_OPENAI_IMAGE_API,
     }

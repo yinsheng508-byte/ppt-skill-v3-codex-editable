@@ -15,17 +15,15 @@ from typing import Any
 from .json_io import read_json, write_json
 from .prompt_rule_utils import (
     clean_rule_text,
-    filter_rule_lines,
     is_document_meta_rule,
     is_optional_label_rule,
     is_unbound_label_region,
-    rule_semantic_key,
     strip_list_marker,
     unique_rules,
 )
 from .validation import ValidationError
 
-PROMPT_FORMAT_VERSION = '2'
+PROMPT_FORMAT_VERSION = '3'
 PLAN_FIELDS = ('visual', 'style', 'layout', 'constraints')
 ROLE_ALIASES = {
     '封面': 'cover', '封面页': 'cover', '内容页': 'content',
@@ -243,6 +241,13 @@ def layout_components(sources: dict, roles: dict[str, int]) -> list[str]:
 
 
 def prepare_plan(run_dir: str | Path, slide_index: int, draft: dict, *, option_id: str | None = None) -> dict:
+    """Freeze the controller's resolved plan without re-expanding source prose.
+
+    ``PPT一致性.md`` and ``图片风格.md`` remain in ``load_prompt_sources`` so
+    the controller can make a page-specific decision.  Runtime records the
+    source basis and validates the result, but must not turn every applicable
+    upstream sentence back into the submitted prompt.
+    """
     context = load_prompt_sources(run_dir, slide_index, option_id=option_id)
     plan = deepcopy(draft)
     plan['version'] = '1'
@@ -253,11 +258,6 @@ def prepare_plan(run_dir: str | Path, slide_index: int, draft: dict, *, option_i
         if not isinstance(plan[field], list) or not all(isinstance(x, str) for x in plan[field]):
             raise ValidationError(f'image_prompt_plan.{field}必须为字符串列表')
     validate_image_prompt_plan(plan, context['sources']['visible'])
-    plan['layout'] += layout_components(context['sources'], plan['text_roles'])
-    consistency = context['sources'].get('ppt_consistency') or {}
-    plan['layout'] += consistency.get('layout_rules') or []
-    style_forbidden = filter_rule_lines(_lines(context['sources']['style']['forbidden']), drop_optional_labels=False)
-    plan['constraints'] += (consistency.get('constraints') or []) + style_forbidden
     for field in PLAN_FIELDS:
         plan[field] = unique(plan[field])
     validate_image_prompt_plan(plan, context['sources']['visible'])
@@ -284,18 +284,6 @@ def current_plan(run_dir: str | Path, slide_index: int, *, option_id: str | None
     plan = validate_image_prompt_plan(context['plan'], context['sources']['visible'])
     if plan['basis_hash'] != context['basis_hash']:
         raise ValidationError(f'第{slide_index}页画面计划来源已变化，请主控重新整理并派发')
-    consistency = context['sources'].get('ppt_consistency') or {}
-    style_forbidden = filter_rule_lines(_lines(context['sources']['style']['forbidden']), drop_optional_labels=False)
-    expected = (
-        style_forbidden
-        + (consistency.get('layout_rules') or [])
-        + (consistency.get('constraints') or [])
-        + layout_components(context['sources'], plan['text_roles'])
-    )
-    present = {rule_semantic_key(x) for f in PLAN_FIELDS for x in plan[f]}
-    for rule in unique(expected):
-        if rule_semantic_key(rule) not in present:
-            raise ValidationError(f'第{slide_index}页画面计划遗漏当前限制或页面组件：' + rule)
     return plan, context['sources']
 
 

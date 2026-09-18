@@ -150,25 +150,27 @@ def _prepare_image_request(run_dir: str | Path, packet_path: str | Path, packet:
         atomic_json(path, snapshot)
     elif read_json(path) != snapshot:
         raise ValidationError('请求快照不可覆盖，请准备新的生成请求')
-    record_prompt_document(root, snapshot, status='生成中' if submitted else '待生成')
+    record_prompt_document(root, snapshot, status='生成中' if submitted else '待生成', render=False)
     return path, snapshot
 
 
-def record_prompt_document(run_dir: str | Path, packet: dict[str, Any], *, result: dict[str, Any] | None = None, status: str | None = None) -> Path:
+def record_prompt_document(run_dir: str | Path, packet: dict[str, Any], *, result: dict[str, Any] | None = None, status: str | None = None, render: bool = True) -> Path:
     root = Path(run_dir)
     if packet.get('stage') != 'stage2':
         return root / PROMPTS_RELPATH
     with _ledger_lock(root):
         entry_id = _entry_id(packet)
         path = root / LEDGER_RELPATH / (entry_id + '.json')
+        frozen_path = root / '_state/阶段2/prompt_history/packets' / (str(packet.get('generation_request_id') or entry_id) + '.json')
+        if not frozen_path.exists():
+            atomic_json(frozen_path, packet)
         entry = read_json(path) if path.exists() else {
-            'id': entry_id, 'packet_id': packet.get('packet_id'), 'prompt': packet['prompt'],
-            'prompt_hash': packet.get('prompt_hash'), 'purpose': packet.get('purpose', 'full_slide'),
-            'slide_index': packet.get('slide_index'), 'option_id': packet.get('option_id'),
-            'title': packet.get('title', ''), 'created_at': now_iso(), 'status': '待生成',
-            'image_style_snapshot': packet.get('image_style_snapshot'), 'reference_snapshots': packet.get('reference_snapshots', []), 'results': [],
+            'id': entry_id, 'packet_id': packet.get('packet_id'),
+            'frozen_request_path': frozen_path.relative_to(root).as_posix(),
+            'purpose': packet.get('purpose', 'full_slide'), 'slide_index': packet.get('slide_index'),
+            'option_id': packet.get('option_id'), 'created_at': now_iso(), 'status': '待生成', 'results': [],
         }
-        if entry['prompt'] != packet['prompt']:
+        if entry.get('prompt') is not None and entry.get('prompt') != packet['prompt']:
             raise ValidationError('请求记录与实际提示词不一致，不能覆盖旧请求')
         if status:
             entry['status'] = status
@@ -176,20 +178,23 @@ def record_prompt_document(run_dir: str | Path, packet: dict[str, Any], *, resul
             identity = '|'.join(str(result.get(k) or '') for k in ('tool_call_id', 'api_call_id', 'generation_id', 'image_sha256'))
             result_key = hashlib.sha256(identity.encode()).hexdigest()[:32]
             if not any(x.get('key') == result_key for x in entry['results']):
-                image = root / result.get('source_image_snapshot', result['image_path'])
-                archive = root / '_state/阶段2/prompt_history/images' / (result_key + image.suffix)
-                archive.parent.mkdir(parents=True, exist_ok=True)
-                if not archive.exists():
-                    shutil.copy2(image, archive)
-                entry['results'].append({'key': result_key, 'image_path': result['image_path'], 'image_sha256': result['image_sha256'], 'archived_image': archive.relative_to(root).as_posix(), 'fixture': bool(result.get('fixture')), 'result_path': result.get('result_path'), 'recorded_at': now_iso()})
+                entry['results'].append({'key': result_key, 'image_path': result['image_path'], 'image_sha256': result['image_sha256'], 'source_image_snapshot': result.get('source_image_snapshot'), 'fixture': bool(result.get('fixture')), 'result_path': result.get('result_path'), 'recorded_at': now_iso()})
             entry['status'] = '测试图片，非正式生图' if result.get('fixture') else ('旧风格请求已返回，仅保留历史记录' if result.get('stale_for_current_style') else '生成成功，确认状态以项目说明为准')
         atomic_json(path, entry)
-        _render_document(root, _read_entries(root))
+        if render:
+            _render_document(root, _read_entries(root))
     return root / PROMPTS_RELPATH
 
 
 def _read_entries(root: Path) -> list[dict[str, Any]]:
-    entries = [read_json(p) for p in sorted((root / LEDGER_RELPATH).glob('*.json'))]
+    entries = []
+    for path in sorted((root / LEDGER_RELPATH).glob('*.json')):
+        entry = read_json(path)
+        frozen = root / entry.get('frozen_request_path', '') if isinstance(entry, dict) else None
+        if isinstance(entry, dict) and entry.get('prompt') is None and frozen and frozen.is_file():
+            packet = read_json(frozen)
+            entry = {**packet, **entry}
+        entries.append(entry)
     legacy = root / HISTORY_RELPATH
     if legacy.exists():
         for i, old in enumerate(read_json(legacy).get('entries', [])):
@@ -205,14 +210,10 @@ def _image_link(root: Path, item: dict[str, Any]) -> str:
     actual = 'sha256:' + hashlib.sha256(current.read_bytes()).hexdigest() if current.is_file() else None
     if actual == item.get('image_sha256') and current.is_relative_to(root / '阶段2_图片版PPT'):
         return current.relative_to(root / '阶段2_图片版PPT').as_posix()
-    old = root / item['archived_image']
+    old = root / item.get('source_image_snapshot', item.get('archived_image', ''))
     if not old.is_file():
         raise ValidationError('历史图片缺失，无法恢复提示词对应关系')
-    attachment = root / '阶段2_图片版PPT/提示词附件' / old.name
-    attachment.parent.mkdir(parents=True, exist_ok=True)
-    if not attachment.exists():
-        shutil.copy2(old, attachment)
-    return attachment.relative_to(root / '阶段2_图片版PPT').as_posix()
+    return os.path.relpath(old, root / '阶段2_图片版PPT').replace(os.sep, '/')
 
 
 def _render_document(root: Path, entries: list[dict[str, Any]]) -> None:
@@ -273,11 +274,12 @@ def _stage2_visible_link(root: Path, relpath: str) -> str:
 
 def rebuild_prompt_document(run_dir: str | Path) -> Path:
     root = Path(run_dir)
-    for receipt in sorted((root / '_state/阶段2/prompt_history/result_receipts').glob('*.json')):
-        result = read_json(receipt)
-        path = root / result['packet_path']
+    result_paths = list((root / '_state/阶段2/results').glob('slide_*.json')) + list((root / '_state/阶段2/prompt_history/stale_results').glob('*.json'))
+    for result_path in sorted(result_paths):
+        result = read_json(result_path)
+        path = root / result.get('packet_path', '')
         if path.is_file():
-            record_prompt_document(root, read_json(path), result=result)
+            record_prompt_document(root, read_json(path), result=result, render=False)
     with _ledger_lock(root):
         _render_document(root, _read_entries(root))
     return root / PROMPTS_RELPATH

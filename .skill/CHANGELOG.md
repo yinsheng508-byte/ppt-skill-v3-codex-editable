@@ -4,6 +4,141 @@
 
 历史条目只记录当时版本事实。若旧条目与最新版本口径冲突，以最高版本条目、`.skill/SKILL.md` 和正式 references 为准。
 
+## 1.1.0 - 2026-09-18
+
+本次将当前工作区已完成的阶段1/2、资料登记和国际版 Canva 辅助编辑改造合并为正式发布版本；稳定调用名仍是 `ppt-skill-v3`，runtime package 仍是 `ppt_skill_v3`。
+
+新增与调整：
+
+- 阶段1以 `content.json` 作为正文权威来源，同步规划、逐页稿和提示词简报；图片请求按页冻结、结果保留不可变 SHA 证据，活动 work packet 改为轻量指针。
+- `drift-check` 按具体动作收窄检查范围，`resume-brief`、`next-action` 和漂移检查默认即时返回，只有显式 `--persist` 才写控制快照。
+- 资料登记同时维护项目内部归档与 `输入资料/<项目名>/` 用户入口副本，并在索引和资料清单中保留两条路径。
+- 国际版 Canva 辅助编辑建立宿主/执行器、页级权威文案与视觉审计、敏感值拒绝记录和阶段外状态边界；允许范围内默认每批 5 页，经主控回读通过后直接提交。
+
+兼容与发布边界：
+
+- 历史项目、旧 task schema、旧派生材料和历史成功记录保持只读兼容；不自动迁移、删除或改写用户项目。
+- GitHub 与发布包只纳入入口、正式规范、模板、runtime、schema、维护说明和 changelog；测试、过程文档、`输入资料/`、`PPT输出/`、构建产物及本机开发目录不随发布提交。
+
+验收：
+
+- 运行安装检查、模板/K12 校验、全量单测、runtime 编译、Skill 快检与发布包 manifest 审计。
+
+## 1.0.12 - 2026-09-18
+
+本次按最新执行口径收紧 Canva 批次策略：允许范围内的 Canva 辅助编辑默认 5 页一批，AI 主控回读文案与预览通过后直接提交，不等待用户确认。
+
+调整：
+
+- 正式 Canva 规范将“每批默认 3 到 5 页，复杂页 1 到 2 页”改为“每批默认 5 页，最后不足 5 页按剩余页处理”。
+- 复杂页不再自动拆成 1 到 2 页，也不因此引入用户确认门禁；工具限制、预览异常、回读失败或视觉未闭环时仍必须 cancel。
+- 新建 task 的 `commit_policy` 新增 `default_batch_page_count=5`，workflow 同步提示默认 5 页一批并直接提交。
+- Skill 入口、维护说明、agent 默认提示和本地任务卡同步为默认 5 页批次策略。
+
+验收：
+
+- `test_canva_task.py` 增加默认批次页数断言。
+- 本次不触碰真实 Canva 设计、不写项目阶段 state。
+
+## 1.0.11 - 2026-09-18
+
+本次补充国际版 Canva 辅助编辑的 AI 主控口径：逐页文案与视觉校验不是纯机械字段检查，而是由主控理解页面角色、权威文案和阶段2视觉意图后，再留下可回读证据并提交允许范围内的修订。
+
+调整：
+
+- 正式 Canva 规范改为“AI 主控的逐页文案与视觉校验”，明确 `page_audit.json` 是主控判断后的证据，不替代主控的页面理解和审美判断。
+- 每页视觉校验要求结合页面角色、信息重点和阶段2参考，说明为什么已贴近参考或为什么只能转人工。
+- Skill 入口、阶段流程、维护说明、agent 默认提示和新建 task brief workflow 均同步为“AI 主控判断 + runtime 证据门禁”。
+- 直接 commit、`pre_authorized`、controller-reviewed preview、文案回读、视觉闭环、人工待办范围和阶段外边界保持不变。
+
+验收：
+
+- 本次仅收口规范与 brief 语义，不触碰真实 Canva 设计、不写项目阶段 state。
+- 相关验证命令见当前任务卡 TC-08 与 TC-06 回写。
+
+## 1.0.10 - 2026-09-18
+
+本次把国际版 Canva 双宿主辅助编辑收敛为可由 AI 实际执行和验证的页级合同。WorkBuddy 仍使用 Canva MCP，Codex 仍使用 Canva 插件；两者在允许范围内均不再等待用户逐批确认，而是在 AI 回读通过后直接提交。
+
+调整：
+
+- 每页审计强制记录权威文字、修改前文字、修改后回读文字、发现项、拟执行操作和逐项视觉检查；通过的 `post_edit_text` 必须与同页 `content.json.final_visible_text` 精确一致。
+- 视觉检查逐项覆盖文字角色与层级、字号、粗细、颜色、对齐、行高、列表、位置、尺寸、溢出、遮挡、断行；未闭环的 `needs_edit`/`blocked` 禁止 commit。
+- 新建 task 升为 schema v1.2，写入 `direct_commit_after_controller_qa`；新批次在控制器审核预览、页级文案和视觉校验通过后，以 `pre_authorized` 直接 commit，保存后必须重新只读回读。
+- schema v1.1 的确认式记录保持只读兼容；新 v1.2 task 不允许进入 `waiting_batch_confirmation`，也不允许将 `confirmed` 作为新提交授权。
+- 直接提交没有放宽边界：Magic Layers、字体族、背景、复杂图形、增删内容/页面、换图和主动重排仍由人工处理，Canva 导出稿仍须用户确认才可作为阶段3外部锁定稿。
+
+验收：
+
+- `test_canva_task.py` 覆盖未审核预览、文案回读不匹配、未闭环视觉项、旧确认式授权与 v1.2 直接授权边界。
+- 完整安装、模板、单测、编译、Skill 快检、打包和包内容检查命令见本次任务卡的 TC-06 回写。
+
+## 1.0.9 - 2026-09-18
+
+本次在不改变“内容确认 → 4 张封面 → 封面确认 → 5 页试样 → 试样确认 → 剩余页 → 最终 PDF 确认 → Stage 3 全格式 → Stage 4 整理交付”流程的前提下，收紧事实来源并去除内部重复写入。
+
+调整：
+
+- `content.json` 成为 Stage 1 正文唯一权威来源；页面规划、逐页稿和 prompt brief 的文字字段按来源摘要同步，旧项目保持兼容读取。
+- 4 封面、5 页试样和内部生图登记使用动作相关严格检查，不扫描无关的后续阶段；最终 PDF、Stage 3/4 收口、手动 doctor 与异常恢复仍完整检查。
+- Stage 2 成图按 SHA 保存一份不可变内部证据图，页面入口优先硬链接；冻结请求、提供方证据、正式结果和轻量尝试记录各自只保存本职事实，停止新写 `result_receipts`。
+- 每个 batch 仅保留一份当前权威 manifest；提示词 Markdown 只在封面、试样、剩余页完成和显式刷新/导出时完整重建。
+- 完整 work packet 仍归档，活动文件改为轻指针；`resume-brief`、`next-action`、`drift-check` 默认即时返回，只有 `--persist` 才保存控制快照。
+- 外部锁定稿进入 Stage 3 时要求存在、声明 SHA 匹配和明确确认依据；标准路线仍必须先确认 Stage 2 图片版 PDF，外部模式不伪造 Stage 2 确认。
+
+兼容：
+
+- 旧 Stage 1 派生材料、完整活动包、控制快照、batch history 和提示词台账继续只读兼容；不自动迁移、删除或压缩真实项目。
+
+验收：
+
+- 全量单测 `274/274` 通过。
+- `inspect-installation`、风格模板、K12 模板、runtime 编译、Skill 快检、打包全部通过。
+- 已生成 `.skill/dist/ppt-skill-v3.zip` 与 manifest；过程文档和测试仍不进入发布包。
+
+## 1.0.8 - 2026-09-18
+
+本次完成国际版 Canva 双宿主阶段外辅助编辑收口：WorkBuddy 使用已授权的 Canva MCP，Codex 使用 Canva 插件；两者共享逐页权威文案校验、小批预览、用户确认与 commit/cancel 纪律。
+
+调整：
+
+- `/canva`、`/可画` 均固定表示国际版 Canva；runtime task v1.1 显式记录 provider、宿主和执行器，不再从 profile 猜测 MCP 可用性。
+- 新增逐页审计、批次状态机、人工待办投影和受限导出记录；批次必须从 `draft` 收口，commit 必须记录“预览已展示 + 用户确认”。
+- 恢复摘要以只读 sidecar 展示 Canva 任务、执行器、最后批次和人工待办，不影响项目阶段、next action 或 decision。
+- 记录拒绝 token、签名 URL 和本机路径；`manual_handoff` 被明确标为 connector 阻断，不能冒充编辑完成。
+
+验收：
+
+- `python3 .skill/scripts/pptctl.py inspect-installation`
+- `python3 .skill/scripts/pptctl.py validate-style-templates`
+- `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
+- `python3 -m compileall -q .skill/scripts/runtime/ppt_skill_v3`
+- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+
+真实 WorkBuddy MCP 与 Codex 插件事务仍需在用户指定的非生产国际版 Canva 设计上分别完成“审计 -> 预览 -> 用户确认 -> commit”验收；该外部验收不由本地单测替代。
+
+## 1.0.7 - 2026-09-18
+
+本次精准收口阶段2独立生图提示词：每份新请求固定使用“画面文字、页面设计、视觉风格、关键约束”四段。AI 主控负责按页选择、归并和表达PPT版式一致性与图片风格继承，runtime 不再把上游自然语言规则重新扩写进 prompt。
+
+调整：
+
+- `image_prompt_plan` 保持既有字段和来源摘要，但登记时不再自动追加 `PPT一致性.md`、共享组件、安全区或风格禁用项。
+- `current_plan` 保留正文、来源摘要和冻结请求的确定性校验，不再要求上游每条自然语言规则逐条出现在计划中。
+- 编译器将文字角色、版式规则、构图和页码自然归入 `【页面设计】`，将图片继承归入 `【视觉风格】`，将文字边界与本页高风险问题归入 `【关键约束】`。
+- 正式规范与阶段1模板明确：页面设计继承PPT版式，视觉风格继承图片表现；不增加字数、规则数量或视觉质量硬门禁。
+- 提示词格式版本升为3；待发送的旧格式请求须由主控重新整理并派发，历史成功提示词和图片保持不变。
+
+验收：
+
+- `python3 .skill/scripts/pptctl.py inspect-installation`
+- `python3 .skill/scripts/pptctl.py validate-style-templates`
+- `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
+- `python3 -m compileall -q .skill/scripts/runtime/ppt_skill_v3`
+- `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
+- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+
 ## 1.0.6 - 2026-09-13
 
 本次完成阶段2提示词按页编译与普通页标题改造：解决 `PPT一致性.md` 整章注入、普通页默认带章节标签、跨页映射进入 prompt、Markdown 残留和重复禁用项稀释本页重点的问题。

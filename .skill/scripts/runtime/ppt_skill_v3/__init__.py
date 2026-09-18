@@ -4,4 +4,4 @@ The runtime package name is ppt_skill_v3. Historical v2 project fields are
 handled only as legacy recovery inputs.
 """
 
-__version__ = "1.0.6"
+__version__ = "1.1.0"

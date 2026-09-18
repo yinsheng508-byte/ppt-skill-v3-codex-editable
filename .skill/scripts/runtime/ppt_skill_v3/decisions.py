@@ -158,15 +158,16 @@ def execute_decision(run_dir: str | Path, decision: dict[str, Any]) -> dict[str,
         state["next_required_action"] = "等待用户确认阶段2图片版 PDF"
     elif decision_type == "approve_stage2_start_stage3":
         _require_state_status(state, "waiting_user_confirmation", decision_type)
-        stage2_pdf = _require_stage2_image_pdf(run_dir, state, "stage2 image PDF is required before approving stage2")
         locked_source = _stage3_locked_source_from_decision(run_dir, decision)
-        state["confirmed"]["stage2_image_deck"] = True
-        state.setdefault("user_artifacts", {})["stage2_image_deck"] = stage2_pdf
-        state.setdefault("expected_user_paths", {})["stage2_image_deck"] = stage2_pdf
+        if locked_source["source_mode"] == "stage2_image_deck":
+            stage2_pdf = _require_stage2_image_pdf(run_dir, state, "stage2 image PDF is required before approving stage2")
+            state["confirmed"]["stage2_image_deck"] = True
+            state.setdefault("user_artifacts", {})["stage2_image_deck"] = stage2_pdf
+            state.setdefault("expected_user_paths", {})["stage2_image_deck"] = stage2_pdf
         state["current_stage"] = "stage3"
         state["status"] = "ready_for_stage3_script"
         state["required_actor"] = "main_controller"
-        state["quality"]["stage2"] = "confirmed"
+        state["quality"]["stage2"] = "confirmed" if locked_source["source_mode"] == "stage2_image_deck" else "external_locked_source"
         state["stage3_locked_presentation_source"] = locked_source
         state["user_artifacts"]["stage3_locked_presentation_source"] = locked_source["source_path"]
         lesson_required = _apply_stage3_lesson_plan_requirement(run_dir, state)
@@ -436,10 +437,12 @@ def _stage3_locked_source_from_decision(run_dir: str | Path, decision: dict[str,
     state = read_state(run_dir)
     default_stage2_source = existing_stage2_image_pdf_rel(run_dir, state) or LEGACY_STAGE2_IMAGE_PDF_REL
     candidate = basis.get("locked_presentation_source") if isinstance(basis, dict) else None
+    supplied_sha = None
     if isinstance(candidate, dict):
         mode = candidate.get("source_mode") or "stage2_image_deck"
         source_path = candidate.get("source_path") or default_stage2_source
         confirmation_basis = candidate.get("confirmation_basis") or str(basis.get("notes") or "")
+        supplied_sha = candidate.get("source_sha256")
     else:
         mode = "stage2_image_deck"
         source_path = default_stage2_source
@@ -451,10 +454,16 @@ def _stage3_locked_source_from_decision(run_dir: str | Path, decision: dict[str,
     resolved = _resolve_locked_source_path(run_dir, source_path)
     if not resolved.exists():
         raise ValidationError("locked presentation source does not exist")
+    actual_sha = _file_sha256(resolved)
+    if mode == "external_locked_deck":
+        if not isinstance(confirmation_basis, str) or not confirmation_basis.strip():
+            raise ValidationError("external_locked_deck requires a user confirmation_basis")
+        if not isinstance(supplied_sha, str) or supplied_sha != actual_sha:
+            raise ValidationError("external_locked_deck requires matching locked_presentation_source.source_sha256")
     locked_source = {
         "source_mode": mode,
         "source_path": source_path,
-        "source_sha256": _file_sha256(resolved),
+        "source_sha256": actual_sha,
         "confirmation_basis": confirmation_basis,
     }
     known_stage2_source = existing_stage2_image_pdf_rel(run_dir, state)
