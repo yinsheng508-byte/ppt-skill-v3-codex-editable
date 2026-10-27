@@ -1,0 +1,26 @@
+# Local user materials and generated presentations: keep empty placeholders only.
+/输入资料/*
+!/输入资料/.gitkeep
+/PPT输出/*
+!/PPT输出/.gitkeep
+
+# Host state, development evidence and local artifacts.
+/.workbuddy/
+/.codex/
+/.skill/tests/
+/.skill/docs/current/
+/.skill/docs/archive/
+/.skill/dist/
+/.skill/references/*分析报告*
+/.skill/references/*调研报告*
+/.skill/references/*.html
+**/__pycache__/
+**/node_modules/
+**/.DS_Store
+*.py[cod]
+*.log
+*.tmp
+*.zip
+.env
+.env.*
+!.env.example

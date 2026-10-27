@@ -17,7 +17,10 @@ if PRIMARY_PYTHON.exists() and os.environ.get("PPTCTL_NO_BUNDLED_PYTHON") != "1"
 if str(RUNTIME_DIR) not in sys.path:
     sys.path.insert(0, str(RUNTIME_DIR))
 
-from ppt_skill_v3.cli import main
+if len(sys.argv) > 1 and sys.argv[1] == "animation":
+    from ppt_skill_v3.animation.cli import main
+else:
+    from ppt_skill_v3.cli import main
 
 
 if __name__ == "__main__":

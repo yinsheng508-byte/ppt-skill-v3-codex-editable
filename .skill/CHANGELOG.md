@@ -1,8 +1,18 @@
 # Changelog
 
-本文件记录 PPT Skill 的仓库发布版本。稳定调用名仍是 `ppt-skill-v3`，runtime package 仍是 `ppt_skill_v3`；这里的版本号只用于同步、发布和变更说明。
+稳定调用名为 `ppt-skill-v3`，runtime 包名为 `ppt_skill_v3`。历史条目记录当时版本事实，当前行为以最新版本、`SKILL.md` 和正式 references 为准。
 
-历史条目只记录当时版本事实。若旧条目与最新版本口径冲突，以最高版本条目、`.skill/SKILL.md` 和正式 references 为准。
+## 1.2.0 - 2026-10-27
+
+- 新增 `/动画`、`/加动画` 阶段外入口，自动定位现有PPTX并原位添加动画；所有文字、图片、元素、样式、位置和分组保持不变。
+- 动画仅使用当前宿主（Codex或WorkBuddy）自带的Bash与Python标准库，不依赖宿主专属插件或MCP，不控制电脑。
+- 默认覆盖所有可安全处理页面，包括封面、目录、章节和结束页；无需分步时整块一次淡入。题目和普通选项先见，答案/标记等待人工点击，独立解析后出。
+- 提供 `animation inspect/apply/verify`、计划schema、完整块归组规则、五场景建议及题答专项示例；支持350ms点击淡入和同一步多对象同步，保留内容检查、哈希绑定、原子保存及重复执行保护。
+- `/canva`、`/可画` 在Codex与WorkBuddy中统一使用国际版Canva MCP；新任务不再选择插件，历史来源保留。继续沿用阶段外边界、人工Magic Layers、默认5页批次和AI回读预览后直接提交规则。
+- 双宿主入口模板登记动画与Canva命令；安装检查兼容WorkBuddy数据目录及仓库级忽略规则。
+- 发布范围仅含正式规范、模板、必要脚本/schema与维护说明，排除过程文档、测试、调研报告、输入输出项目、课件、媒体、缓存及凭据。
+
+验证边界：自动回归及源码/发布清单检查覆盖程序行为；单页Canva MCP真实读写验证只证明当次会话和设计的可用性。WPS/PowerPoint实播、其他设计权限和WorkBuddy客户端连接须按具体文件/环境记录，不将历史样本或本地测试泛化为全部场景通过。
 
 ## 1.1.0 - 2026-09-18
 
@@ -114,7 +124,7 @@
 - `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
 - `python3 -m compileall -q .skill/scripts/runtime/ppt_skill_v3`
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .skill`
 
 真实 WorkBuddy MCP 与 Codex 插件事务仍需在用户指定的非生产国际版 Canva 设计上分别完成“审计 -> 预览 -> 用户确认 -> commit”验收；该外部验收不由本地单测替代。
 
@@ -137,7 +147,7 @@
 - `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
 - `python3 -m compileall -q .skill/scripts/runtime/ppt_skill_v3`
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .skill`
 
 ## 1.0.6 - 2026-09-13
 
@@ -160,7 +170,7 @@
 - `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
 - `python3 -m compileall -q .skill/scripts/runtime/ppt_skill_v3`
 - `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .skill`
 - `python3 .skill/scripts/package_skill.py --output-dir .skill/dist`
 
 ## 1.0.5 - 2026-09-12
@@ -178,7 +188,7 @@
 - `python3 .skill/scripts/pptctl.py inspect-installation`
 - `python3 .skill/scripts/pptctl.py validate-style-templates`
 - `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .skill`
 - `PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
 - `python3 .skill/scripts/package_skill.py --output-dir .skill/dist`
 
@@ -197,7 +207,7 @@
 - `python3 .skill/scripts/pptctl.py inspect-installation`
 - `python3 .skill/scripts/pptctl.py validate-style-templates`
 - `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .skill`
 - `PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
 - `python3 .skill/scripts/package_skill.py --output-dir .skill/dist`
 
@@ -223,7 +233,7 @@
 - `python3 .skill/scripts/pptctl.py inspect-installation`
 - `python3 .skill/scripts/pptctl.py validate-style-templates`
 - `python3 .skill/scripts/pptctl.py validate-k12-subject-profiles`
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .skill`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .skill`
 - `PYTHONPATH=.skill/scripts/runtime:.skill/tests python3 -m unittest discover -s .skill/tests -v`
 - `python3 .skill/scripts/package_skill.py --output-dir .skill/dist`
 
@@ -342,7 +352,7 @@
 
 验收：
 
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .`
 - `python3 scripts/pptctl.py validate-style-templates`
 - `python3 scripts/pptctl.py validate-k12-subject-profiles`
 - `PYTHONPATH=scripts/runtime python3 -m unittest discover -s tests -v`
@@ -383,7 +393,7 @@
 
 验收：
 
-- `python3 /Users/yinxinhe/.codex/skills/.system/skill-creator/scripts/quick_validate.py .`
+- `python3 "<skill-creator目录>/scripts/quick_validate.py" .`
 - `PYTHONPATH=scripts/runtime python3 -m unittest discover -s tests`
 - `python3 scripts/pptctl.py validate-style-templates`
 

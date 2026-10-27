@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .canva_task import CANVA_TASKS_REL
+from .animation.task import task_summaries
 from .deliverable_naming import existing_stage3_lesson_plan_output_rel, existing_stage3_output_rel
 from .doctor import check_project
 from .image_style import result_is_current, style_document_path
@@ -47,6 +48,15 @@ def build_next_action(run_dir: str | Path, *, persist: bool = False) -> dict[str
 
 def build_resume_brief(run_dir: str | Path, *, persist: bool = False) -> dict[str, Any]:
     root = Path(run_dir)
+    if not (root / "_state/project_state.json").exists() and task_summaries(root):
+        brief = {"schema_version": "1.0", "project_name": root.name, "run_dir": str(root),
+                 "current_stage": None, "status": "animation_only", "required_actor": None,
+                 "animation_tasks": task_summaries(root), "created_at": now_iso(),
+                 "next_action": {"action_kind": "animation_sidecar", "summary": "按动画任务记录恢复，不推进主阶段", "confirmation_required": False}}
+        if persist:
+            write_json(control_dir(root) / "resume_brief.json", brief)
+            (control_dir(root) / "resume_brief.md").write_text(render_resume_brief_markdown(brief), encoding="utf-8")
+        return brief
     state = read_state(root)
     doctor = check_project(root)
     next_action = build_next_action(root, persist=persist)
@@ -72,6 +82,7 @@ def build_resume_brief(run_dir: str | Path, *, persist: bool = False) -> dict[st
         },
         "image_style_status": _image_style_status(root, state),
         "canva_auxiliary_tasks": _canva_auxiliary_tasks(root),
+        "animation_tasks": task_summaries(root),
         "doctor": {
             "ok": doctor["ok"],
             "issues_count": len(doctor.get("issues", [])),
@@ -148,6 +159,10 @@ def render_resume_brief_markdown(brief: dict[str, Any]) -> str:
             )
     else:
         lines.append("- 暂无")
+    if brief.get("animation_tasks"):
+        lines.extend(["", "## 阶段外动画任务", ""])
+        for task in brief["animation_tasks"]:
+            lines.append(f"- {task.get('task_id')}：{task.get('status')}；原文件={task.get('source')}；路径={task.get('path')}")
     lines.extend(
         [
             "",

@@ -63,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
+    from .animation.cli import add_parser as add_animation_parser
+    add_animation_parser(subparsers)
+
     init_parser = subparsers.add_parser("init", help="Create a v3 project skeleton.")
     init_parser.add_argument("--project-name", required=True)
     init_parser.add_argument("--output-root")
@@ -145,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
     canva_task_parser.add_argument("--trigger", default="/canva")
     canva_task_parser.add_argument("--provider", default="canva_international")
     canva_task_parser.add_argument("--host-profile", choices=["codex", "workbuddy", "unknown"], default="unknown")
-    canva_task_parser.add_argument("--executor", choices=["canva_mcp", "canva_plugin", "manual_handoff", "unresolved"], default="unresolved")
+    canva_task_parser.add_argument("--executor", choices=["canva_mcp", "manual_handoff", "unresolved"], default="unresolved")
     canva_event_parser = subparsers.add_parser("record-canva-task-event", help="Append one sanitized stage-external Canva batch event.")
     canva_event_parser.add_argument("--run-dir", required=True)
     canva_event_parser.add_argument("--task-id", required=True)
@@ -330,6 +333,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 0
+    if args.command == "animation":
+        from .animation.cli import dispatch
+        return dispatch(args)
     if args.command == "init":
         output_root = args.output_root or default_output_root()
         run_dir = create_project(args.project_name, output_root)

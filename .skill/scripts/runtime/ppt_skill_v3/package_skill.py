@@ -38,7 +38,9 @@ EXCLUDED_DIR_NAMES = {
 EXCLUDED_FILE_NAMES = {".DS_Store"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log", ".tmp", ".zip"}
 FORBIDDEN_PARTS = {"src", "node_modules", "outputs", "inputs", "PPT输出", "输入资料", "tests", "__pycache__"}
-EXCLUDED_NAME_FRAGMENTS = {"任务卡", "验收记录", "改造规划", "改造需求", "dev_smoke"}
+EXCLUDED_NAME_FRAGMENTS = {"任务卡", "验收记录", "改造规划", "改造需求", "调研报告", "分析报告", "dev_smoke"}
+# This source package contains maintained rules, templates and executable code only.
+ALLOWED_FILE_SUFFIXES = {".md", ".json", ".yaml", ".yml", ".py"}
 INCLUDED_DOC_REL_PATHS = {"docs/维护说明.md"}
 EXCLUDED_REL_PATHS: set[str] = set()
 
@@ -76,6 +78,7 @@ def package_skill(skill_dir: str | Path, output_dir: str | Path) -> dict[str, An
             "excluded_name_fragments": sorted(EXCLUDED_NAME_FRAGMENTS),
             "excluded_rel_paths": sorted(EXCLUDED_REL_PATHS),
             "excluded_suffixes": sorted(EXCLUDED_SUFFIXES),
+            "allowed_file_suffixes": sorted(ALLOWED_FILE_SUFFIXES),
             "forbidden_parts": sorted(FORBIDDEN_PARTS),
         },
     }
@@ -133,6 +136,8 @@ def _is_safe_package_name(value: str) -> bool:
 
 
 def _include_file(path: Path) -> bool:
+    if path.name != ".gitignore" and path.suffix.lower() not in ALLOWED_FILE_SUFFIXES:
+        return False
     if path.name in EXCLUDED_FILE_NAMES:
         return False
     if path.suffix in EXCLUDED_SUFFIXES:

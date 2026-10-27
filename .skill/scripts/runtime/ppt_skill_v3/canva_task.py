@@ -20,7 +20,8 @@ STAGE2_PDF_REL = Path(LEGACY_STAGE2_IMAGE_PDF_REL)
 STAGE2_IMAGES_REL = Path("阶段2_图片版PPT") / "img"
 CANVA_PROVIDER = "canva_international"
 CANVA_HOST_PROFILES = {"codex", "workbuddy", "unknown"}
-CANVA_EXECUTORS = {"canva_mcp", "canva_plugin", "manual_handoff", "unresolved"}
+# New tasks use MCP on both hosts. Historical plugin records remain readable.
+CANVA_EXECUTORS = {"canva_mcp", "manual_handoff", "unresolved"}
 CANVA_TASK_STATUSES = {
     "brief_ready",
     "waiting_manual_magic_layers",
@@ -159,7 +160,7 @@ def create_canva_task_brief(
         "host_profile": host_profile,
         "executor": executor,
         "selection_basis": {
-            "selection_status": "fallback_selected" if executor == "manual_handoff" else ("selected" if executor in {"canva_mcp", "canva_plugin"} else "selection_required"),
+            "selection_status": "fallback_selected" if executor == "manual_handoff" else ("selected" if executor == "canva_mcp" else "selection_required"),
             "required_tools_visible": None,
             "authorization_ready": None,
             "selected_at": created_at,
@@ -183,7 +184,7 @@ def create_canva_task_brief(
         },
         "references": references,
         "workflow": [
-            "Resolve the current host executor with an explicit tool and authorization preflight before any Canva call.",
+            "Verify international Canva MCP tools and authorization on Codex or WorkBuddy before any Canva call; do not fall back to a plugin or browser control.",
             "Acquire the Canva design through the selected executor when allowed, otherwise ask the user to upload it manually.",
             "Ask the user to run Magic Layers manually in Canva and return the edit link.",
             "Let the AI controller interpret each page role, authority copy, and stage2 visual intent before writing page-audit evidence.",
@@ -394,10 +395,8 @@ def _normalize_executor(value: str, *, host_profile: str) -> str:
     normalized = value.strip().lower()
     if normalized not in CANVA_EXECUTORS:
         raise ValidationError(f"unsupported Canva executor: {value}")
-    if normalized == "canva_mcp" and host_profile != "workbuddy":
-        raise ValidationError("canva_mcp executor requires host_profile=workbuddy")
-    if normalized == "canva_plugin" and host_profile != "codex":
-        raise ValidationError("canva_plugin executor requires host_profile=codex")
+    if normalized == "canva_mcp" and host_profile not in {"codex", "workbuddy"}:
+        raise ValidationError("canva_mcp executor requires host_profile=codex or workbuddy")
     return normalized
 
 

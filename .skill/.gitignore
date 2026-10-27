@@ -31,3 +31,8 @@ build/
 .env
 .env.*
 !.env.example
+
+# Only maintained Markdown references are distributed.
+/references/*分析报告*
+/references/*调研报告*
+/references/*.html

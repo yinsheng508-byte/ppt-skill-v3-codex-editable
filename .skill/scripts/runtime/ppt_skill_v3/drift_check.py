@@ -107,6 +107,17 @@ def run_drift_check(run_dir: str | Path, *, action: str | None = None, persist: 
         issues.append("当前目录是 Skill 根目录或外层工作区，不是具体 PPT 项目目录；请先定位 PPT输出/<中文项目名>/。")
         result = _result(root, normalized_action, None, issues, warnings, [], None)
         return _persist(root, result, persist)
+    if normalized_action == "animation":
+        # This sidecar has its own source/plan/content checks; never relax other actions.
+        from .animation.task import guard_run_dir
+        from .validation import ValidationError
+        try:
+            guard_run_dir(root)
+        except ValidationError as exc:
+            issues.append(str(exc))
+        state = read_state(root) if project_state_path(root).exists() else None
+        doctor = {"ok": not issues, "issues": issues, "warnings": [], "mode": "scoped", "scope": "animation"}
+        return _persist(root, _result(root, normalized_action, state, issues, warnings, [], doctor), persist)
     if not project_state_path(root).exists():
         issues.append(f"缺少项目状态文件：{project_state_path(root)}")
         result = _result(root, normalized_action, None, issues, warnings, [], None)

@@ -10,11 +10,10 @@ Canva 辅助编辑不是阶段3，不替代阶段3。阶段3仍以用户确认�
 
 | 条件 | 执行器 | 处理 |
 |---|---|---|
-| WorkBuddy，当前会话中完整 `mcp__canva__*` 编辑工具可用 | `canva_mcp` | 走 Canva MCP 路线 |
-| Codex，当前会话中 Canva 插件可用 | `canva_plugin` | 走 Canva 插件路线 |
-| WorkBuddy MCP 或 Codex 插件不可见、未授权或无设计编辑权限 | `manual_handoff` / `blocked_connector` | 提示用户连接、OAuth 或手动处理；不得虚报可编辑任务完成 |
+| Codex 或 WorkBuddy，当前会话中所需国际版 Canva MCP 编辑工具可用且已授权 | `canva_mcp` | 统一走国际版 Canva MCP 路线 |
+| 当前宿主 MCP 不可见、未授权或无设计编辑权限 | `manual_handoff` / `blocked_connector` | 提示连接、OAuth 或手动处理；不回退插件或浏览器，不虚报可编辑任务完成 |
 
-宿主 profile 只用于选择首选执行器：`CODEBUDDY.md` 代表 WorkBuddy，`AGENTS.md` 代表 Codex。真正选择必须先探测当次工具与授权状态；Python runtime 不得仅凭 profile 猜测 MCP 已可用。
+宿主 profile 只记录运行环境：`CODEBUDDY.md` 代表 WorkBuddy，`AGENTS.md` 代表 Codex；两者的新任务执行器均为 `canva_mcp`。必须先检查当次 MCP 工具与授权状态；Python runtime 不得仅凭 profile 或连接器名称猜测 MCP 已可用。工具常见前缀为 `mcp__canva__*`，宿主命名不同时按实际暴露的等价国际版 Canva MCP 工具识别。
 
 默认流程：
 
@@ -142,27 +141,26 @@ _state/阶段1/content.json
 - 大设计先分页只读校验；不把整套 richtexts/fills 原文复制到任务记录。
 - 连续工具失败、并发编辑导致 transaction 失效或页面结构变化时，停止批量操作、cancel、重新读取当前页面并向用户汇报。
 
-## 执行器差异
+## 双宿主统一执行器
 
-### WorkBuddy：Canva MCP
+### Codex 与 WorkBuddy：国际版 Canva MCP
 
-- `canva_mcp` 仅在完整 `mcp__canva__*` 编辑能力可见、OAuth 已完成且设计具备编辑权限时使用。
+- `canva_mcp` 仅在当前任务所需的 MCP 读取、编辑事务、预览及提交/取消能力可见、OAuth 已完成且设计具备编辑权限时使用。
 - 可用范围限于读取设计/页面/文本、editing transaction、文本替换、文本格式、最小位置/尺寸修复、预览、commit/cancel和按需导出。
 - `generate-design`、`create-design-from-candidate`、`upload-asset-from-url`、`update_fill`、`insert_fill`、协作评论与品牌套件不进入 PPT 项目正式流程。
 - `export-design` 只产生 Canva 导出候选稿；签名导出/缩略图 URL 有时效，只记录设计 ID、格式、页范围和时间。
 
-### Codex：Canva 插件
+### 历史记录兼容
 
-- `canva_plugin` 仅在插件实际可用时使用。
-- 使用插件相应的导入、读取、transaction、文本替换、文本格式、移动/缩放、预览和 commit/cancel能力。
-- 插件不可见时说明需要连接或启用插件；不默认切到浏览器自动控制。
+- 新任务不再选择 `canva_plugin`；MCP 不可用时记录阻断或人工待办，不静默换工具。
+- 历史任务中的 `canva_plugin` 或 `legacy_plugin_inferred` 只保留原执行来源，不改写为 MCP，不当作当前连接可用的证据。继续编辑前检查 MCP，并创建关联原任务的新 `canva_mcp` brief；历史记录留存供回读。
 
 ## 阶段外记录与恢复
 
 项目内先运行：
 
 ```bash
-python3 .skill/scripts/pptctl.py create-canva-task-brief --run-dir <项目目录> --provider canva_international --host-profile <codex|workbuddy> --executor <canva_mcp|canva_plugin>
+python3 .skill/scripts/pptctl.py create-canva-task-brief --run-dir <项目目录> --provider canva_international --host-profile <codex|workbuddy> --executor canva_mcp
 ```
 
 该命令只创建阶段外 brief，不调用 Canva、不上传文件、不修改阶段状态。无法完成 preflight 时可创建 `--executor unresolved` 的 brief；不可把未知能力记录成可用 MCP。

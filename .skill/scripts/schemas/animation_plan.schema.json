@@ -1,0 +1,137 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "profile": {
+      "const": "linear_fade_b_v1"
+    },
+    "scene": {
+      "enum": [
+        "general",
+        "k12",
+        "pitch",
+        "healthcare",
+        "competition",
+        "defense"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ]
+    },
+    "existing_timing_policy": {
+      "enum": [
+        "reject",
+        "replace_selected"
+      ]
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "slide_index": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "part": {
+            "type": "string",
+            "minLength": 1
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "role": {
+                  "enum": [
+                    "question",
+                    "given",
+                    "options",
+                    "answer",
+                    "answer_marker",
+                    "explanation",
+                    "content",
+                    "decoration",
+                    "safety"
+                  ]
+                },
+                "targets": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "click": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "question_id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "id",
+                "role",
+                "targets",
+                "click"
+              ]
+            }
+          },
+          "needs_layering": {
+            "type": "boolean",
+            "const": false
+          },
+          "visual_checked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slide_index",
+          "part",
+          "units"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "profile",
+    "scene",
+    "source",
+    "existing_timing_policy",
+    "pages"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppt-skill-v3.local/schemas/animation_plan.schema.json",
+  "title": "ppt-skill-v3 animation plan",
+  "description": "Runtime additionally validates full object coverage, source binding and manual question-answer order."
+}

@@ -86,7 +86,7 @@ def inspect_installation(workspace_root: str | Path | None = None) -> dict[str, 
         if not (root / dirname).is_dir():
             issues.append(f"根目录缺少 {dirname}/。")
 
-    allowed = {".git", ".skill", INPUT_DIRNAME, OUTPUT_DIRNAME}
+    allowed = {".git", ".gitignore", ".skill", ".workbuddy", ".DS_Store", INPUT_DIRNAME, OUTPUT_DIRNAME}
     if expected_entry:
         allowed.add(expected_entry)
     root_items = sorted(path.name for path in root.iterdir())
